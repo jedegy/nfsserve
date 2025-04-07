@@ -214,6 +214,38 @@ pub trait NFSFileSystem: Sync {
     /// Reads a symlink
     async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3>;
 
+    /// Creates a hard link
+    /// If not supported due to readonly file system or other reasons
+    /// this should return Err(nfsstat3::NFS3ERR_ROFS) or Err(nfsstat3::NFS3ERR_NOTSUPP)
+    async fn link(
+        &self,
+        file_id: fileid3,
+        link_dir_id: fileid3,
+        link_name: &filename3,
+    ) -> Result<fattr3, nfsstat3>;
+
+    /// Creates a special node (character device, block device, socket, or FIFO)
+    /// If not supported due to readonly file system or other reasons
+    /// this should return Err(nfsstat3::NFS3ERR_ROFS) or Err(nfsstat3::NFS3ERR_NOTSUPP)
+    async fn mknod(
+        &self,
+        dir_id: fileid3,
+        name: &filename3,
+        ftype: ftype3,
+        specdata: specdata3,
+        attrs: &sattr3,
+    ) -> Result<(fileid3, fattr3), nfsstat3>;
+
+    /// Commits data written to a file to stable storage
+    /// If not supported due to readonly file system
+    /// this should return Err(nfsstat3::NFS3ERR_ROFS)
+    async fn commit(
+        &self,
+        file_id: fileid3,
+        offset: u64,
+        count: u32,
+    ) -> Result<fattr3, nfsstat3>;
+
     /// Get static file system Information
     async fn fsinfo(
         &self,
