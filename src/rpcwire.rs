@@ -139,14 +139,41 @@ pub async fn write_fragment(
     socket: &mut tokio::net::TcpStream,
     buf: &[u8],
 ) -> Result<(), anyhow::Error> {
-    // TODO: split into many fragments
-    assert!(buf.len() < (1 << 31));
-    // set the last flag
-    let fragment_header = buf.len() as u32 + (1 << 31);
-    let header_buf = u32::to_be_bytes(fragment_header);
-    socket.write_all(&header_buf).await?;
-    trace!("Writing fragment length:{}", buf.len());
-    socket.write_all(buf).await?;
+    // Maximum fragment size is 2^31 - 1 bytes
+    const MAX_FRAGMENT_SIZE: usize = (1 << 31) - 1;
+
+    let mut offset = 0;
+    while offset < buf.len() {
+        // Calculate the size of this fragment
+        let remaining = buf.len() - offset;
+        let fragment_size = std::cmp::min(remaining, MAX_FRAGMENT_SIZE);
+
+        // Determine if this is the last fragment
+        let is_last = offset + fragment_size >= buf.len();
+
+        // Create the fragment header
+        // The highest bit indicates if this is the last fragment
+        let fragment_header = if is_last {
+            fragment_size as u32 + (1 << 31)
+        } else {
+            fragment_size as u32
+        };
+
+        let header_buf = u32::to_be_bytes(fragment_header);
+        socket.write_all(&header_buf).await?;
+
+        trace!(
+            "Writing fragment length:{}, last:{}",
+            fragment_size,
+            is_last
+        );
+        socket
+            .write_all(&buf[offset..offset + fragment_size])
+            .await?;
+
+        offset += fragment_size;
+    }
+
     Ok(())
 }
 
