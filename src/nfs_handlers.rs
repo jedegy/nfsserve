@@ -516,7 +516,7 @@ pub async fn nfsproc3_access(
     debug!("nfsproc3_access({:?},{:?},{:?})", xid, handle, access);
 
     let id = context.vfs.fh_to_id(&handle);
-    // fail if unable to convert file handle
+    // Fail if unable to convert file handle
     if let Err(stat) = id {
         make_success_reply(xid).serialize(output)?;
         stat.serialize(output)?;
@@ -525,19 +525,103 @@ pub async fn nfsproc3_access(
     }
     let id = id.unwrap();
 
+    // Get object attributes
     let obj_attr = match context.vfs.getattr(id).await {
         Ok(v) => nfs::post_op_attr::attributes(v),
-        Err(_) => nfs::post_op_attr::Void,
+        Err(stat) => {
+            // If we can't get attributes, return an error
+            make_success_reply(xid).serialize(output)?;
+            stat.serialize(output)?;
+            nfs::post_op_attr::Void.serialize(output)?;
+            return Ok(());
+        }
     };
-    // TODO better checks here
-    if !matches!(context.vfs.capabilities(), VFSCapabilities::ReadWrite) {
-        access &= ACCESS3_READ | ACCESS3_LOOKUP;
+
+    // Check if the object exists
+    if let nfs::post_op_attr::Void = obj_attr {
+        make_success_reply(xid).serialize(output)?;
+        nfs::nfsstat3::NFS3ERR_NOENT.serialize(output)?;
+        nfs::post_op_attr::Void.serialize(output)?;
+        return Ok(());
     }
-    debug!(" {:?} ---> {:?}", xid, access);
+
+    // Extract object attributes
+    let attr = match obj_attr {
+        nfs::post_op_attr::attributes(attr) => attr,
+        _ => {
+            // This should not happen, since we already checked that obj_attr is not Void
+            make_success_reply(xid).serialize(output)?;
+            nfs::nfsstat3::NFS3ERR_SERVERFAULT.serialize(output)?;
+            nfs::post_op_attr::Void.serialize(output)?;
+            return Ok(());
+        }
+    };
+
+    // Check access permissions based on file type and attributes
+    let mut granted_access = 0;
+
+    // Always allow LOOKUP for existing objects
+    granted_access |= ACCESS3_LOOKUP;
+
+    // Check permissions based on file type
+    match attr.ftype {
+        nfs::ftype3::NF3REG => {
+            // For regular files
+            if !matches!(context.vfs.capabilities(), VFSCapabilities::ReadWrite) {
+                // If the file system is read-only, allow only reading
+                if access & (ACCESS3_READ | ACCESS3_EXECUTE) != 0 {
+                    granted_access |= access & (ACCESS3_READ | ACCESS3_EXECUTE);
+                }
+            } else {
+                // If the file system supports read and write, check access permissions
+                // Here you can add a check for real access permissions based on file attributes
+                // For example, check owner, group, and access permissions
+
+                // For simplicity, allow all requested permissions
+                granted_access |= access;
+            }
+        }
+        nfs::ftype3::NF3DIR => {
+            // For directories
+            if !matches!(context.vfs.capabilities(), VFSCapabilities::ReadWrite) {
+                // If the file system is read-only, allow only reading
+                if access & ACCESS3_READ != 0 {
+                    granted_access |= ACCESS3_READ;
+                }
+            } else {
+                // If the file system supports read and write, check access permissions
+                // For directories, allow reading and execution
+                if access & (ACCESS3_READ | ACCESS3_EXECUTE) != 0 {
+                    granted_access |= access & (ACCESS3_READ | ACCESS3_EXECUTE);
+                }
+
+                // For operations that modify the directory, check write permissions
+                if access & (ACCESS3_MODIFY | ACCESS3_EXTEND | ACCESS3_DELETE) != 0 {
+                    // Here you can add a check for real access permissions
+                    granted_access |= access & (ACCESS3_MODIFY | ACCESS3_EXTEND | ACCESS3_DELETE);
+                }
+            }
+        }
+        nfs::ftype3::NF3LNK => {
+            // For symbolic links, allow only reading
+            if access & ACCESS3_READ != 0 {
+                granted_access |= ACCESS3_READ;
+            }
+        }
+        _ => {
+            // For other file types (devices, sockets, etc.)
+            // Allow only reading and execution
+            if access & (ACCESS3_READ | ACCESS3_EXECUTE) != 0 {
+                granted_access |= access & (ACCESS3_READ | ACCESS3_EXECUTE);
+            }
+        }
+    }
+
+    debug!(" {:?} ---> {:?}", xid, granted_access);
     make_success_reply(xid).serialize(output)?;
     nfs::nfsstat3::NFS3_OK.serialize(output)?;
     obj_attr.serialize(output)?;
-    access.serialize(output)?;
+    granted_access.serialize(output)?;
     Ok(())
 }
 
