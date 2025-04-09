@@ -1,12 +1,13 @@
-use crate::nfs::*;
 use std::fs::Metadata;
 use std::fs::Permissions;
-
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
+
 use tokio::fs::OpenOptions;
 use tracing::debug;
+
+use crate::nfs::*;
 
 /// Compares if file metadata has changed in a significant way
 #[cfg(any(target_os = "linux", target_os = "macos"))]

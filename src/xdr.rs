@@ -1,8 +1,11 @@
+use std::io::{Read, Write};
+
 use byteorder::BigEndian;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
-pub type XDREndian = BigEndian;
+
 use crate::nfs::nfsstring;
+
+pub type XDREndian = BigEndian;
 
 /// See https://datatracker.ietf.org/doc/html/rfc1014
 #[allow(clippy::upper_case_acronyms)]

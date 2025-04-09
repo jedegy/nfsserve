@@ -1,16 +1,20 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(dead_code)]
-use crate::context::RPCContext;
-use crate::nfs;
-use crate::rpc::*;
-use crate::vfs::VFSCapabilities;
-use crate::xdr::*;
+
+use std::io::{Read, Write};
+
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
-use std::io::{Read, Write};
 use tracing::{debug, error, trace, warn};
+
+use crate::context::RPCContext;
+use crate::nfs;
 use crate::nfs::ftype3;
+use crate::rpc::*;
+use crate::vfs::VFSCapabilities;
+use crate::xdr::*;
+
 /*
 program NFS_PROGRAM {
  version NFS_V3 {
@@ -830,7 +834,8 @@ pub async fn nfsproc3_readdirplus(
     };
 
     let dirversion = if let Ok(ref dir_attr) = dir_attr_maybe {
-        let cvf_version = ((dir_attr.mtime.seconds as u64) << 32) | (dir_attr.mtime.nseconds as u64);
+        let cvf_version =
+            ((dir_attr.mtime.seconds as u64) << 32) | (dir_attr.mtime.nseconds as u64);
         cvf_version.to_be_bytes()
     } else {
         nfs::cookieverf3::default()
@@ -1022,7 +1027,8 @@ pub async fn nfsproc3_readdir(
     };
 
     let dirversion = if let Ok(ref dir_attr) = dir_attr_maybe {
-        let cvf_version = ((dir_attr.mtime.seconds as u64) << 32) | (dir_attr.mtime.nseconds as u64);
+        let cvf_version =
+            ((dir_attr.mtime.seconds as u64) << 32) | (dir_attr.mtime.nseconds as u64);
         cvf_version.to_be_bytes()
     } else {
         nfs::cookieverf3::default()
@@ -2266,18 +2272,18 @@ pub async fn nfsproc3_link(
         Ok(fattr) => {
             // Get file attributes
             let file_attr = nfs::post_op_attr::attributes(fattr);
-            
+
             // Get the directory attributes after the operation
             let post_dir_attr = match context.vfs.getattr(dirid).await {
                 Ok(v) => nfs::post_op_attr::attributes(v),
                 Err(_) => nfs::post_op_attr::Void,
             };
-            
+
             let wcc_res = nfs::wcc_data {
                 before: pre_dir_attr,
                 after: post_dir_attr,
             };
-            
+
             debug!("link success");
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
@@ -2290,18 +2296,18 @@ pub async fn nfsproc3_link(
                 Ok(v) => nfs::post_op_attr::attributes(v),
                 Err(_) => nfs::post_op_attr::Void,
             };
-            
+
             // Get the directory attributes after the operation (unchanged)
             let post_dir_attr = match context.vfs.getattr(dirid).await {
                 Ok(v) => nfs::post_op_attr::attributes(v),
                 Err(_) => nfs::post_op_attr::Void,
             };
-            
+
             let wcc_res = nfs::wcc_data {
                 before: pre_dir_attr,
                 after: post_dir_attr,
             };
-            
+
             debug!("link failed: {:?}", stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
@@ -2440,27 +2446,31 @@ pub async fn nfsproc3_mknod(
     let attr = nfs::sattr3::default();
 
     // Call VFS mknod method
-    match context.vfs.mknod(
-        dirid,
-        &args.where_dir.name,
-        args.what.mknod_type,
-        args.what.device.device,
-        &attr,
-    ).await {
+    match context
+        .vfs
+        .mknod(
+            dirid,
+            &args.where_dir.name,
+            args.what.mknod_type,
+            args.what.device.device,
+            &attr,
+        )
+        .await
+    {
         Ok((fid, fattr)) => {
             debug!("mknod success --> {:?}, {:?}", fid, fattr);
-            
+
             // Get the directory attributes after the operation
             let post_dir_attr = match context.vfs.getattr(dirid).await {
                 Ok(v) => nfs::post_op_attr::attributes(v),
                 Err(_) => nfs::post_op_attr::Void,
             };
-            
+
             let wcc_res = nfs::wcc_data {
                 before: pre_dir_attr,
                 after: post_dir_attr,
             };
-            
+
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             // serialize MKNOD3resok
@@ -2471,18 +2481,18 @@ pub async fn nfsproc3_mknod(
         }
         Err(stat) => {
             debug!("mknod error --> {:?}", stat);
-            
+
             // Get the directory attributes after the operation (unchanged)
             let post_dir_attr = match context.vfs.getattr(dirid).await {
                 Ok(v) => nfs::post_op_attr::attributes(v),
                 Err(_) => nfs::post_op_attr::Void,
             };
-            
+
             let wcc_res = nfs::wcc_data {
                 before: pre_dir_attr,
                 after: post_dir_attr,
             };
-            
+
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             wcc_res.serialize(output)?;
@@ -2572,7 +2582,7 @@ pub async fn nfsproc3_commit(
     match context.vfs.commit(id, args.offset, args.count).await {
         Ok(fattr) => {
             let post_obj_attr = nfs::post_op_attr::attributes(fattr);
-            
+
             let res = COMMIT3resok {
                 file_wcc: nfs::wcc_data {
                     before: pre_obj_attr,
@@ -2580,7 +2590,7 @@ pub async fn nfsproc3_commit(
                 },
                 verf: context.vfs.serverid(),
             };
-            
+
             debug!("commit success");
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
@@ -2591,12 +2601,12 @@ pub async fn nfsproc3_commit(
                 Ok(v) => nfs::post_op_attr::attributes(v),
                 Err(_) => nfs::post_op_attr::Void,
             };
-            
+
             let wcc_data = nfs::wcc_data {
                 before: pre_obj_attr,
                 after: post_obj_attr,
             };
-            
+
             debug!("commit error: {:?}", stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;

@@ -1,14 +1,18 @@
-use crate::nfs::*;
-use crate::nfs;
-use async_trait::async_trait;
 use std::cmp::Ordering;
 use std::sync::Once;
 use std::time::SystemTime;
+
+use async_trait::async_trait;
+
+use crate::nfs;
+use crate::nfs::*;
+
 #[derive(Default, Debug)]
 pub struct DirEntrySimple {
     pub fileid: fileid3,
     pub name: filename3,
 }
+
 #[derive(Default, Debug)]
 pub struct ReadDirSimpleResult {
     pub entries: Vec<DirEntrySimple>,
@@ -21,6 +25,7 @@ pub struct DirEntry {
     pub name: filename3,
     pub attr: fattr3,
 }
+
 #[derive(Default, Debug)]
 pub struct ReadDirResult {
     pub entries: Vec<DirEntry>,
@@ -239,19 +244,10 @@ pub trait NFSFileSystem: Sync {
     /// Commits data written to a file to stable storage
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn commit(
-        &self,
-        file_id: fileid3,
-        offset: u64,
-        count: u32,
-    ) -> Result<fattr3, nfsstat3>;
+    async fn commit(&self, file_id: fileid3, offset: u64, count: u32) -> Result<fattr3, nfsstat3>;
 
     /// Get static file system Information
-    async fn fsinfo(
-        &self,
-        root_fileid: fileid3,
-    ) -> Result<fsinfo3, nfsstat3> {
-
+    async fn fsinfo(&self, root_fileid: fileid3) -> Result<fsinfo3, nfsstat3> {
         let dir_attr: nfs::post_op_attr = match self.getattr(root_fileid).await {
             Ok(v) => nfs::post_op_attr::attributes(v),
             Err(_) => nfs::post_op_attr::Void,

@@ -3,11 +3,14 @@
 // And its nice to keep the original RFC names and case
 #![allow(non_camel_case_types)]
 
-use crate::xdr::*;
+use std::io::{Read, Write};
+
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
-use std::io::{Read, Write};
+
+use crate::xdr::*;
+
 // Transcribed from RFC 1057
 
 #[allow(non_camel_case_types)]

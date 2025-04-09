@@ -1,6 +1,11 @@
-use anyhow::anyhow;
 use std::io::Cursor;
 use std::io::{Read, Write};
+
+use anyhow::anyhow;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::io::DuplexStream;
+use tokio::sync::mpsc;
 use tracing::{debug, error, trace, warn};
 
 use crate::context::RPCContext;
@@ -15,10 +20,6 @@ use crate::nfs_handlers;
 
 use crate::portmap;
 use crate::portmap_handlers;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::DuplexStream;
-use tokio::sync::mpsc;
 
 // Information from RFC 5531
 // https://datatracker.ietf.org/doc/html/rfc5531
@@ -47,10 +48,16 @@ async fn handle_rpc(
             return Ok(true);
         }
 
-        if context.transaction_tracker.is_retransmission(xid, &context.client_addr) {
+        if context
+            .transaction_tracker
+            .is_retransmission(xid, &context.client_addr)
+        {
             // This is a retransmission
             // Drop the message and return
-            debug!("Retransmission detected, xid: {}, client_addr: {}, call: {:?}", xid, context.client_addr, call);
+            debug!(
+                "Retransmission detected, xid: {}, client_addr: {}, call: {:?}",
+                xid, context.client_addr, call
+            );
             return Ok(false);
         }
 
@@ -77,8 +84,11 @@ async fn handle_rpc(
                 prog_unavail_reply_message(xid).serialize(output)?;
                 Ok(())
             }
-        }.map(|_| true);
-        context.transaction_tracker.mark_processed(xid, &context.client_addr);
+        }
+        .map(|_| true);
+        context
+            .transaction_tracker
+            .mark_processed(xid, &context.client_addr);
         res
     } else {
         error!("Unexpectedly received a Reply instead of a Call");
