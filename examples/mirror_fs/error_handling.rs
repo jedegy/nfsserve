@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use nfsserve::nfs::nfsstat3;
+use nfsserve::xdr::nfs3::nfsstat3;
 
 /// Result type for NFS operations
 pub type NFSResult<T> = Result<T, nfsstat3>;

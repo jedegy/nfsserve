@@ -8,18 +8,8 @@ use tokio::io::DuplexStream;
 use tokio::sync::mpsc;
 use tracing::{debug, error, trace, warn};
 
-use crate::context::RPCContext;
-use crate::rpc::*;
-use crate::xdr::*;
-
-use crate::mount;
-use crate::mount_handlers;
-
-use crate::nfs;
-use crate::nfs_handlers;
-
-use crate::portmap;
-use crate::portmap_handlers;
+use crate::protocol::xdr::{self, mount, nfs3, portmap, XDR};
+use crate::protocol::{nfs, rpc};
 
 // Information from RFC 5531
 // https://datatracker.ietf.org/doc/html/rfc5531
@@ -31,20 +21,20 @@ const NFS_METADATA_PROGRAM: u32 = 200024;
 async fn handle_rpc(
     input: &mut impl Read,
     output: &mut impl Write,
-    mut context: RPCContext,
+    mut context: rpc::Context,
 ) -> Result<bool, anyhow::Error> {
-    let mut recv = rpc_msg::default();
+    let mut recv = xdr::rpc::rpc_msg::default();
     recv.deserialize(input)?;
     let xid = recv.xid;
-    if let rpc_body::CALL(call) = recv.body {
-        if let auth_flavor::AUTH_UNIX = call.cred.flavor {
-            let mut auth = auth_unix::default();
+    if let xdr::rpc::rpc_body::CALL(call) = recv.body {
+        if let xdr::rpc::auth_flavor::AUTH_UNIX = call.cred.flavor {
+            let mut auth = xdr::rpc::auth_unix::default();
             auth.deserialize(&mut Cursor::new(&call.cred.body))?;
             context.auth = auth;
         }
         if call.rpcvers != 2 {
             warn!("Invalid RPC version {} != 2", call.rpcvers);
-            rpc_vers_mismatch(xid).serialize(output)?;
+            xdr::rpc::rpc_vers_mismatch(xid).serialize(output)?;
             return Ok(true);
         }
 
@@ -62,26 +52,26 @@ async fn handle_rpc(
         }
 
         let res = {
-            if call.prog == nfs::PROGRAM {
-                nfs_handlers::handle_nfs(xid, call, input, output, &context).await
+            if call.prog == nfs3::PROGRAM {
+                nfs::v3::handle_nfs(xid, call, input, output, &context).await
             } else if call.prog == portmap::PROGRAM {
-                portmap_handlers::handle_portmap(xid, call, input, output, &context)
+                nfs::portmap::handle_portmap(xid, call, input, output, &context)
             } else if call.prog == mount::PROGRAM {
-                mount_handlers::handle_mount(xid, call, input, output, &context).await
+                nfs::mount::handle_mount(xid, call, input, output, &context).await
             } else if call.prog == NFS_ACL_PROGRAM
                 || call.prog == NFS_ID_MAP_PROGRAM
                 || call.prog == NFS_METADATA_PROGRAM
             {
                 trace!("ignoring NFS_ACL packet");
-                prog_unavail_reply_message(xid).serialize(output)?;
+                xdr::rpc::prog_unavail_reply_message(xid).serialize(output)?;
                 Ok(())
             } else {
                 warn!(
                     "Unknown RPC Program number {} != {}",
                     call.prog,
-                    nfs::PROGRAM
+                    nfs3::PROGRAM
                 );
-                prog_unavail_reply_message(xid).serialize(output)?;
+                xdr::rpc::prog_unavail_reply_message(xid).serialize(output)?;
                 Ok(())
             }
         }
@@ -187,13 +177,13 @@ pub struct SocketMessageHandler {
     cur_fragment: Vec<u8>,
     socket_receive_channel: DuplexStream,
     reply_send_channel: mpsc::UnboundedSender<SocketMessageType>,
-    context: RPCContext,
+    context: rpc::Context,
 }
 
 impl SocketMessageHandler {
     /// Creates a new SocketMessageHandler with the receiver for queued message replies
     pub fn new(
-        context: &RPCContext,
+        context: &rpc::Context,
     ) -> (
         Self,
         DuplexStream,

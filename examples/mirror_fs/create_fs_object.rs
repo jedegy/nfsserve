@@ -1,4 +1,4 @@
-use nfsserve::nfs::{nfspath3, sattr3};
+use nfsserve::xdr::nfs3::{nfspath3, sattr3};
 
 /// Enumeration for the create_fs_object method
 pub enum CreateFSObject {

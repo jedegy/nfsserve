@@ -11,7 +11,7 @@ use filetime;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
 
-use crate::xdr::*;
+use super::*;
 
 // Transcribed from RFC 1813.
 
@@ -42,6 +42,7 @@ pub const NFS3_WRITEVERFSIZE: u32 = 8;
 #[allow(non_camel_case_types)]
 #[derive(Default, Clone)]
 pub struct nfsstring(pub Vec<u8>);
+
 impl nfsstring {
     pub fn len(&self) -> usize {
         self.0.len()
@@ -50,16 +51,19 @@ impl nfsstring {
         self.0.is_empty()
     }
 }
+
 impl From<Vec<u8>> for nfsstring {
     fn from(value: Vec<u8>) -> Self {
         Self(value)
     }
 }
+
 impl From<&[u8]> for nfsstring {
     fn from(value: &[u8]) -> Self {
         Self(value.into())
     }
 }
+
 impl AsRef<[u8]> for nfsstring {
     fn as_ref(&self) -> &[u8] {
         &self.0
@@ -73,16 +77,57 @@ impl std::ops::Deref for nfsstring {
         &self.0
     }
 }
+
 impl fmt::Debug for nfsstring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", String::from_utf8_lossy(&self.0))
     }
 }
+
 impl fmt::Display for nfsstring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", String::from_utf8_lossy(&self.0))
     }
 }
+
+impl XDR for nfsstring {
+    fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
+        self.0.serialize(dest)
+    }
+    fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
+        self.0.deserialize(src)
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
+pub enum NFSProgram {
+    NFSPROC3_NULL = 0,
+    NFSPROC3_GETATTR = 1,
+    NFSPROC3_SETATTR = 2,
+    NFSPROC3_LOOKUP = 3,
+    NFSPROC3_ACCESS = 4,
+    NFSPROC3_READLINK = 5,
+    NFSPROC3_READ = 6,
+    NFSPROC3_WRITE = 7,
+    NFSPROC3_CREATE = 8,
+    NFSPROC3_MKDIR = 9,
+    NFSPROC3_SYMLINK = 10,
+    NFSPROC3_MKNOD = 11,
+    NFSPROC3_REMOVE = 12,
+    NFSPROC3_RMDIR = 13,
+    NFSPROC3_RENAME = 14,
+    NFSPROC3_LINK = 15,
+    NFSPROC3_READDIR = 16,
+    NFSPROC3_READDIRPLUS = 17,
+    NFSPROC3_FSSTAT = 18,
+    NFSPROC3_FSINFO = 19,
+    NFSPROC3_PATHCONF = 20,
+    NFSPROC3_COMMIT = 21,
+    INVALID = 22,
+}
+
 pub type opaque = u8;
 pub type filename3 = nfsstring;
 pub type nfspath3 = nfsstring;
@@ -566,3 +611,269 @@ XDRStruct!(symlinkdata3, symlink_attributes, symlink_data);
 pub fn get_root_mount_handle() -> Vec<u8> {
     vec![0]
 }
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct READ3args {
+    pub file: nfs_fh3,
+    pub offset: offset3,
+    pub count: count3,
+}
+XDRStruct!(READ3args, file, offset, count);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct READ3resok {
+    pub file_attributes: post_op_attr,
+    pub count: count3,
+    pub eof: bool,
+    pub data: Vec<u8>,
+}
+XDRStruct!(READ3resok, file_attributes, count, eof, data);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct COMMIT3args {
+    pub file: nfs_fh3,
+    pub offset: offset3,
+    pub count: count3,
+}
+XDRStruct!(COMMIT3args, file, offset, count);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct COMMIT3resok {
+    pub file_wcc: wcc_data,
+    pub verf: writeverf3,
+}
+XDRStruct!(COMMIT3resok, file_wcc, verf);
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
+#[repr(u32)]
+pub enum devicetype3 {
+    #[default]
+    NF3CHR = 0,
+    NF3BLK = 1,
+    NF3SOCK = 2,
+    NF3FIFO = 3,
+}
+XDREnumSerde!(devicetype3);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct devicedata3 {
+    pub dev_type: devicetype3,
+    pub device: specdata3,
+}
+XDRStruct!(devicedata3, dev_type, device);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct mknoddata3 {
+    pub mknod_type: ftype3,
+    pub device: devicedata3,
+}
+XDRStruct!(mknoddata3, mknod_type, device);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct MKNOD3args {
+    pub where_dir: diropargs3,
+    pub what: mknoddata3,
+}
+XDRStruct!(MKNOD3args, where_dir, what);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct LINK3args {
+    pub file: nfs_fh3,
+    pub link: diropargs3,
+}
+XDRStruct!(LINK3args, file, link);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct WRITE3args {
+    pub file: nfs_fh3,
+    pub offset: offset3,
+    pub count: count3,
+    pub stable: u32,
+    pub data: Vec<u8>,
+}
+XDRStruct!(WRITE3args, file, offset, count, stable, data);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct WRITE3resok {
+    pub file_wcc: wcc_data,
+    pub count: count3,
+    pub committed: stable_how,
+    pub verf: writeverf3,
+}
+XDRStruct!(WRITE3resok, file_wcc, count, committed, verf);
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
+#[repr(u32)]
+pub enum stable_how {
+    #[default]
+    UNSTABLE = 0,
+    DATA_SYNC = 1,
+    FILE_SYNC = 2,
+}
+XDREnumSerde!(stable_how);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct READDIRPLUS3args {
+    pub dir: nfs_fh3,
+    pub cookie: cookie3,
+    pub cookieverf: cookieverf3,
+    pub dircount: count3,
+    pub maxcount: count3,
+}
+XDRStruct!(
+    READDIRPLUS3args,
+    dir,
+    cookie,
+    cookieverf,
+    dircount,
+    maxcount
+);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct entry3 {
+    pub fileid: fileid3,
+    pub name: filename3,
+    pub cookie: cookie3,
+}
+XDRStruct!(entry3, fileid, name, cookie);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct READDIR3args {
+    pub dir: nfs_fh3,
+    pub cookie: cookie3,
+    pub cookieverf: cookieverf3,
+    pub dircount: count3,
+}
+XDRStruct!(READDIR3args, dir, cookie, cookieverf, dircount);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct entryplus3 {
+    pub fileid: fileid3,
+    pub name: filename3,
+    pub cookie: cookie3,
+    pub name_attributes: post_op_attr,
+    pub name_handle: post_op_fh3,
+}
+XDRStruct!(
+    entryplus3,
+    fileid,
+    name,
+    cookie,
+    name_attributes,
+    name_handle
+);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct FSSTAT3resok {
+    pub obj_attributes: post_op_attr,
+    pub tbytes: size3,
+    pub fbytes: size3,
+    pub abytes: size3,
+    pub tfiles: size3,
+    pub ffiles: size3,
+    pub afiles: size3,
+    pub invarsec: u32,
+}
+XDRStruct!(
+    FSSTAT3resok,
+    obj_attributes,
+    tbytes,
+    fbytes,
+    abytes,
+    tfiles,
+    ffiles,
+    afiles,
+    invarsec
+);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct MKDIR3args {
+    pub dirops: diropargs3,
+    pub attributes: sattr3,
+}
+XDRStruct!(MKDIR3args, dirops, attributes);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct SYMLINK3args {
+    pub dirops: diropargs3,
+    pub symlink: symlinkdata3,
+}
+XDRStruct!(SYMLINK3args, dirops, symlink);
+
+pub const ACCESS3_READ: u32 = 0x0001;
+pub const ACCESS3_LOOKUP: u32 = 0x0002;
+pub const ACCESS3_MODIFY: u32 = 0x0004;
+pub const ACCESS3_EXTEND: u32 = 0x0008;
+pub const ACCESS3_DELETE: u32 = 0x0010;
+pub const ACCESS3_EXECUTE: u32 = 0x0020;
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
+#[repr(u32)]
+pub enum createmode3 {
+    #[default]
+    UNCHECKED = 0,
+    GUARDED = 1,
+    EXCLUSIVE = 2,
+}
+XDREnumSerde!(createmode3);
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct PATHCONF3resok {
+    pub obj_attributes: post_op_attr,
+    pub linkmax: u32,
+    pub name_max: u32,
+    pub no_trunc: bool,
+    pub chown_restricted: bool,
+    pub case_insensitive: bool,
+    pub case_preserving: bool,
+}
+XDRStruct!(
+    PATHCONF3resok,
+    obj_attributes,
+    linkmax,
+    name_max,
+    no_trunc,
+    chown_restricted,
+    case_insensitive,
+    case_preserving
+);
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, Default)]
+#[repr(u32)]
+pub enum sattrguard3 {
+    #[default]
+    Void,
+    obj_ctime(nfstime3),
+}
+XDRBoolUnion!(sattrguard3, obj_ctime, nfstime3);
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, Default)]
+pub struct SETATTR3args {
+    pub object: nfs_fh3,
+    pub new_attribute: sattr3,
+    pub guard: sattrguard3,
+}
+XDRStruct!(SETATTR3args, object, new_attribute, guard);

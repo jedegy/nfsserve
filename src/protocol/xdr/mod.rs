@@ -3,7 +3,10 @@ use std::io::{Read, Write};
 use byteorder::BigEndian;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-use crate::nfs::nfsstring;
+pub mod mount;
+pub mod nfs3;
+pub mod portmap;
+pub mod rpc;
 
 pub type XDREndian = BigEndian;
 
@@ -130,15 +133,6 @@ impl XDR for Vec<u8> {
         let mut zeros: [u8; 4] = [0, 0, 0, 0];
         src.read_exact(&mut zeros[..pad])?;
         Ok(())
-    }
-}
-
-impl XDR for nfsstring {
-    fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
-        self.0.serialize(dest)
-    }
-    fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
-        self.0.deserialize(src)
     }
 }
 

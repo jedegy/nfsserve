@@ -57,7 +57,7 @@ fn housekeeping(transactions: &mut HashMap<(u32, String), TransactionState>, max
     });
 }
 
-pub enum TransactionState {
+enum TransactionState {
     InProgress,
     Completed(SystemTime),
 }

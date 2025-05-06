@@ -9,7 +9,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
 
-use crate::xdr::*;
+use super::*;
 
 // Transcribed from RFC 1057 Appendix A
 
@@ -40,3 +40,39 @@ pub enum mountstat3 {
     MNT3ERR_SERVERFAULT = 10006, /* A failure on the server */
 }
 XDREnumSerde!(mountstat3);
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug)]
+pub struct mountres3_ok {
+    pub fhandle: fhandle3, // really same thing as nfs::nfs_fh3
+    pub auth_flavors: Vec<u32>,
+}
+XDRStruct!(mountres3_ok, fhandle, auth_flavors);
+
+/*
+From RFC 1813 Appendix I
+program MOUNT_PROGRAM {
+ version MOUNT_V3 {
+    void      MOUNTPROC3_NULL(void)    = 0;
+    mountres3 MOUNTPROC3_MNT(dirpath)  = 1;
+    mountlist MOUNTPROC3_DUMP(void)    = 2;
+    void      MOUNTPROC3_UMNT(dirpath) = 3;
+    void      MOUNTPROC3_UMNTALL(void) = 4;
+    exports   MOUNTPROC3_EXPORT(void)  = 5;
+ } = 3;
+} = 100005;
+*/
+
+#[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
+pub enum MountProgram {
+    MOUNTPROC3_NULL = 0,
+    MOUNTPROC3_MNT = 1,
+    MOUNTPROC3_DUMP = 2,
+    MOUNTPROC3_UMNT = 3,
+    MOUNTPROC3_UMNTALL = 4,
+    MOUNTPROC3_EXPORT = 5,
+    INVALID,
+}
+XDREnumSerde!(MountProgram);

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use intaglio::Symbol;
-use nfsserve::nfs::{fattr3, fileid3, ftype3};
+use nfsserve::xdr::nfs3::{fattr3, fileid3, ftype3};
 
 /// A file system entry representing a file or directory
 #[derive(Debug, Clone)]

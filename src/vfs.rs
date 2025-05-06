@@ -4,13 +4,12 @@ use std::time::SystemTime;
 
 use async_trait::async_trait;
 
-use crate::nfs;
-use crate::nfs::*;
+use crate::protocol::xdr::nfs3;
 
 #[derive(Default, Debug)]
 pub struct DirEntrySimple {
-    pub fileid: fileid3,
-    pub name: filename3,
+    pub fileid: nfs3::fileid3,
+    pub name: nfs3::filename3,
 }
 
 #[derive(Default, Debug)]
@@ -21,9 +20,9 @@ pub struct ReadDirSimpleResult {
 
 #[derive(Default, Debug)]
 pub struct DirEntry {
-    pub fileid: fileid3,
-    pub name: filename3,
-    pub attr: fattr3,
+    pub fileid: nfs3::fileid3,
+    pub name: nfs3::filename3,
+    pub attr: nfs3::fattr3,
 }
 
 #[derive(Default, Debug)]
@@ -65,7 +64,7 @@ fn get_generation_number() -> u64 {
 }
 
 /// What capabilities are supported
-pub enum VFSCapabilities {
+pub enum Capabilities {
     ReadOnly,
     ReadWrite,
 }
@@ -101,9 +100,9 @@ pub enum VFSCapabilities {
 #[async_trait]
 pub trait NFSFileSystem: Sync {
     /// Returns the set of capabilities supported
-    fn capabilities(&self) -> VFSCapabilities;
+    fn capabilities(&self) -> Capabilities;
     /// Returns the ID the of the root directory "/"
-    fn root_dir(&self) -> fileid3;
+    fn root_dir(&self) -> nfs3::fileid3;
     /// Look up the id of a path in a directory
     ///
     /// i.e. given a directory dir/ containing a file a.txt
@@ -111,72 +110,93 @@ pub trait NFSFileSystem: Sync {
     /// and this should return the id of the file "dir/a.txt"
     ///
     /// This method should be fast as it is used very frequently.
-    async fn lookup(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3>;
+    async fn lookup(
+        &self,
+        dirid: nfs3::fileid3,
+        filename: &nfs3::filename3,
+    ) -> Result<nfs3::fileid3, nfs3::nfsstat3>;
 
     /// Returns the attributes of an id.
     /// This method should be fast as it is used very frequently.
-    async fn getattr(&self, id: fileid3) -> Result<fattr3, nfsstat3>;
+    async fn getattr(&self, id: nfs3::fileid3) -> Result<nfs3::fattr3, nfs3::nfsstat3>;
 
     /// Sets the attributes of an id
     /// this should return Err(nfsstat3::NFS3ERR_ROFS) if readonly
-    async fn setattr(&self, id: fileid3, setattr: sattr3) -> Result<fattr3, nfsstat3>;
+    async fn setattr(
+        &self,
+        id: nfs3::fileid3,
+        setattr: nfs3::sattr3,
+    ) -> Result<nfs3::fattr3, nfs3::nfsstat3>;
 
     /// Reads the contents of a file returning (bytes, EOF)
     /// Note that offset/count may go past the end of the file and that
     /// in that case, all bytes till the end of file are returned.
     /// EOF must be flagged if the end of the file is reached by the read.
-    async fn read(&self, id: fileid3, offset: u64, count: u32)
-        -> Result<(Vec<u8>, bool), nfsstat3>;
+    async fn read(
+        &self,
+        id: nfs3::fileid3,
+        offset: u64,
+        count: u32,
+    ) -> Result<(Vec<u8>, bool), nfs3::nfsstat3>;
 
     /// Writes the contents of a file returning (bytes, EOF)
     /// Note that offset/count may go past the end of the file and that
     /// in that case, the file is extended.
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn write(&self, id: fileid3, offset: u64, data: &[u8]) -> Result<fattr3, nfsstat3>;
+    async fn write(
+        &self,
+        id: nfs3::fileid3,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<nfs3::fattr3, nfs3::nfsstat3>;
 
     /// Creates a file with the following attributes.
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn create(
         &self,
-        dirid: fileid3,
-        filename: &filename3,
-        attr: sattr3,
-    ) -> Result<(fileid3, fattr3), nfsstat3>;
+        dirid: nfs3::fileid3,
+        filename: &nfs3::filename3,
+        attr: nfs3::sattr3,
+    ) -> Result<(nfs3::fileid3, nfs3::fattr3), nfs3::nfsstat3>;
 
     /// Creates a file if it does not already exist
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn create_exclusive(
         &self,
-        dirid: fileid3,
-        filename: &filename3,
-    ) -> Result<fileid3, nfsstat3>;
+        dirid: nfs3::fileid3,
+        filename: &nfs3::filename3,
+    ) -> Result<nfs3::fileid3, nfs3::nfsstat3>;
 
     /// Makes a directory with the following attributes.
     /// If not supported dur to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn mkdir(
         &self,
-        dirid: fileid3,
-        dirname: &filename3,
-    ) -> Result<(fileid3, fattr3), nfsstat3>;
+        dirid: nfs3::fileid3,
+        dirname: &nfs3::filename3,
+    ) -> Result<(nfs3::fileid3, nfs3::fattr3), nfs3::nfsstat3>;
 
     /// Removes a file.
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn remove(&self, dirid: fileid3, filename: &filename3) -> Result<(), nfsstat3>;
+    async fn remove(
+        &self,
+        dirid: nfs3::fileid3,
+        filename: &nfs3::filename3,
+    ) -> Result<(), nfs3::nfsstat3>;
 
     /// Removes a file.
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn rename(
         &self,
-        from_dirid: fileid3,
-        from_filename: &filename3,
-        to_dirid: fileid3,
-        to_filename: &filename3,
-    ) -> Result<(), nfsstat3>;
+        from_dirid: nfs3::fileid3,
+        from_filename: &nfs3::filename3,
+        to_dirid: nfs3::fileid3,
+        to_filename: &nfs3::filename3,
+    ) -> Result<(), nfs3::nfsstat3>;
 
     /// Returns the contents of a directory with pagination.
     /// Directory listing should be deterministic.
@@ -188,18 +208,18 @@ pub trait NFSFileSystem: Sync {
     //
     async fn readdir(
         &self,
-        dirid: fileid3,
-        start_after: fileid3,
+        dirid: nfs3::fileid3,
+        start_after: nfs3::fileid3,
         max_entries: usize,
-    ) -> Result<ReadDirResult, nfsstat3>;
+    ) -> Result<ReadDirResult, nfs3::nfsstat3>;
 
     /// Simple version of readdir.
     /// Only need to return filename and id
     async fn readdir_simple(
         &self,
-        dirid: fileid3,
+        dirid: nfs3::fileid3,
         count: usize,
-    ) -> Result<ReadDirSimpleResult, nfsstat3> {
+    ) -> Result<ReadDirSimpleResult, nfs3::nfsstat3> {
         Ok(ReadDirSimpleResult::from_readdir_result(
             &self.readdir(dirid, 0, count).await?,
         ))
@@ -210,50 +230,55 @@ pub trait NFSFileSystem: Sync {
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn symlink(
         &self,
-        dirid: fileid3,
-        linkname: &filename3,
-        symlink: &nfspath3,
-        attr: &sattr3,
-    ) -> Result<(fileid3, fattr3), nfsstat3>;
+        dirid: nfs3::fileid3,
+        linkname: &nfs3::filename3,
+        symlink: &nfs3::nfspath3,
+        attr: &nfs3::sattr3,
+    ) -> Result<(nfs3::fileid3, nfs3::fattr3), nfs3::nfsstat3>;
 
     /// Reads a symlink
-    async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3>;
+    async fn readlink(&self, id: nfs3::fileid3) -> Result<nfs3::nfspath3, nfs3::nfsstat3>;
 
     /// Creates a hard link
     /// If not supported due to readonly file system or other reasons
     /// this should return Err(nfsstat3::NFS3ERR_ROFS) or Err(nfsstat3::NFS3ERR_NOTSUPP)
     async fn link(
         &self,
-        file_id: fileid3,
-        link_dir_id: fileid3,
-        link_name: &filename3,
-    ) -> Result<fattr3, nfsstat3>;
+        file_id: nfs3::fileid3,
+        link_dir_id: nfs3::fileid3,
+        link_name: &nfs3::filename3,
+    ) -> Result<nfs3::fattr3, nfs3::nfsstat3>;
 
     /// Creates a special node (character device, block device, socket, or FIFO)
     /// If not supported due to readonly file system or other reasons
     /// this should return Err(nfsstat3::NFS3ERR_ROFS) or Err(nfsstat3::NFS3ERR_NOTSUPP)
     async fn mknod(
         &self,
-        dir_id: fileid3,
-        name: &filename3,
-        ftype: ftype3,
-        specdata: specdata3,
-        attrs: &sattr3,
-    ) -> Result<(fileid3, fattr3), nfsstat3>;
+        dir_id: nfs3::fileid3,
+        name: &nfs3::filename3,
+        ftype: nfs3::ftype3,
+        specdata: nfs3::specdata3,
+        attrs: &nfs3::sattr3,
+    ) -> Result<(nfs3::fileid3, nfs3::fattr3), nfs3::nfsstat3>;
 
     /// Commits data written to a file to stable storage
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn commit(&self, file_id: fileid3, offset: u64, count: u32) -> Result<fattr3, nfsstat3>;
+    async fn commit(
+        &self,
+        file_id: nfs3::fileid3,
+        offset: u64,
+        count: u32,
+    ) -> Result<nfs3::fattr3, nfs3::nfsstat3>;
 
     /// Get static file system Information
-    async fn fsinfo(&self, root_fileid: fileid3) -> Result<fsinfo3, nfsstat3> {
-        let dir_attr: nfs::post_op_attr = match self.getattr(root_fileid).await {
-            Ok(v) => nfs::post_op_attr::attributes(v),
-            Err(_) => nfs::post_op_attr::Void,
+    async fn fsinfo(&self, root_fileid: nfs3::fileid3) -> Result<nfs3::fsinfo3, nfs3::nfsstat3> {
+        let dir_attr: nfs3::post_op_attr = match self.getattr(root_fileid).await {
+            Ok(v) => nfs3::post_op_attr::attributes(v),
+            Err(_) => nfs3::post_op_attr::Void,
         };
 
-        let res = fsinfo3 {
+        let res = nfs3::fsinfo3 {
             obj_attributes: dir_attr,
             rtmax: 1024 * 1024,
             rtpref: 1024 * 124,
@@ -263,40 +288,40 @@ pub trait NFSFileSystem: Sync {
             wtmult: 1024 * 1024,
             dtpref: 1024 * 1024,
             maxfilesize: 128 * 1024 * 1024 * 1024,
-            time_delta: nfs::nfstime3 {
+            time_delta: nfs3::nfstime3 {
                 seconds: 0,
                 nseconds: 1000000,
             },
-            properties: nfs::FSF_SYMLINK | nfs::FSF_HOMOGENEOUS | nfs::FSF_CANSETTIME,
+            properties: nfs3::FSF_SYMLINK | nfs3::FSF_HOMOGENEOUS | nfs3::FSF_CANSETTIME,
         };
         Ok(res)
     }
 
     /// Converts the fileid to an opaque NFS file handle. Optional.
-    fn id_to_fh(&self, id: fileid3) -> nfs_fh3 {
+    fn id_to_fh(&self, id: nfs3::fileid3) -> nfs3::nfs_fh3 {
         let gennum = get_generation_number();
         let mut ret: Vec<u8> = Vec::new();
         ret.extend_from_slice(&gennum.to_le_bytes());
         ret.extend_from_slice(&id.to_le_bytes());
-        nfs_fh3 { data: ret }
+        nfs3::nfs_fh3 { data: ret }
     }
     /// Converts an opaque NFS file handle to a fileid.  Optional.
-    fn fh_to_id(&self, id: &nfs_fh3) -> Result<fileid3, nfsstat3> {
+    fn fh_to_id(&self, id: &nfs3::nfs_fh3) -> Result<nfs3::fileid3, nfs3::nfsstat3> {
         if id.data.len() != 16 {
-            return Err(nfsstat3::NFS3ERR_BADHANDLE);
+            return Err(nfs3::nfsstat3::NFS3ERR_BADHANDLE);
         }
         let gen = u64::from_le_bytes(id.data[0..8].try_into().unwrap());
         let id = u64::from_le_bytes(id.data[8..16].try_into().unwrap());
         let gennum = get_generation_number();
         match gen.cmp(&gennum) {
-            Ordering::Less => Err(nfsstat3::NFS3ERR_STALE),
-            Ordering::Greater => Err(nfsstat3::NFS3ERR_BADHANDLE),
+            Ordering::Less => Err(nfs3::nfsstat3::NFS3ERR_STALE),
+            Ordering::Greater => Err(nfs3::nfsstat3::NFS3ERR_BADHANDLE),
             Ordering::Equal => Ok(id),
         }
     }
     /// Converts a complete path to a fileid.  Optional.
     /// The default implementation walks the directory structure with lookup()
-    async fn path_to_id(&self, path: &[u8]) -> Result<fileid3, nfsstat3> {
+    async fn path_to_id(&self, path: &[u8]) -> Result<nfs3::fileid3, nfs3::nfsstat3> {
         let splits = path.split(|&r| r == b'/');
         let mut fid = self.root_dir();
         for component in splits {
@@ -308,7 +333,7 @@ pub trait NFSFileSystem: Sync {
         Ok(fid)
     }
 
-    fn serverid(&self) -> cookieverf3 {
+    fn serverid(&self) -> nfs3::cookieverf3 {
         let gennum = get_generation_number();
         gennum.to_le_bytes()
     }

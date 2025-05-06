@@ -10,9 +10,7 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
-use crate::context::RPCContext;
-use crate::rpcwire::*;
-use crate::transaction_tracker::TransactionTracker;
+use crate::protocol::{rpc, xdr};
 use crate::vfs::NFSFileSystem;
 
 /// A NFS Tcp Connection Handler
@@ -22,7 +20,7 @@ pub struct NFSTcpListener<T: NFSFileSystem + Send + Sync + 'static> {
     arcfs: Arc<T>,
     mount_signal: Option<mpsc::Sender<bool>>,
     export_name: Arc<String>,
-    transaction_tracker: Arc<TransactionTracker>,
+    transaction_tracker: Arc<rpc::TransactionTracker>,
 }
 
 pub fn generate_host_ip(hostnum: u16) -> String {
@@ -36,9 +34,10 @@ pub fn generate_host_ip(hostnum: u16) -> String {
 /// processes an established socket
 async fn process_socket(
     mut socket: tokio::net::TcpStream,
-    context: RPCContext,
+    context: rpc::Context,
 ) -> Result<(), anyhow::Error> {
-    let (mut message_handler, mut socksend, mut msgrecvchan) = SocketMessageHandler::new(&context);
+    let (mut message_handler, mut socksend, mut msgrecvchan) =
+        rpc::SocketMessageHandler::new(&context);
     let _ = socket.set_nodelay(true);
 
     tokio::spawn(async move {
@@ -78,7 +77,7 @@ async fn process_socket(
                         return Err(e);
                     }
                     Some(Ok(msg)) => {
-                        if let Err(e) = write_fragment(&mut socket, &msg).await {
+                        if let Err(e) = rpc::write_fragment(&mut socket, &msg).await {
                             error!("Write error {:?}", e);
                         }
                     }
@@ -171,7 +170,7 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
             arcfs,
             mount_signal: None,
             export_name: Arc::from("/".to_string()),
-            transaction_tracker: Arc::new(TransactionTracker::new(Duration::from_secs(60))),
+            transaction_tracker: Arc::new(rpc::TransactionTracker::new(Duration::from_secs(60))),
         })
     }
 
@@ -215,10 +214,10 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcp for NFSTcpListener<T> {
     async fn handle_forever(&self) -> io::Result<()> {
         loop {
             let (socket, _) = self.listener.accept().await?;
-            let context = RPCContext {
+            let context = rpc::Context {
                 local_port: self.port,
                 client_addr: socket.peer_addr().unwrap().to_string(),
-                auth: crate::rpc::auth_unix::default(),
+                auth: xdr::rpc::auth_unix::default(),
                 vfs: self.arcfs.clone(),
                 mount_signal: self.mount_signal.clone(),
                 export_name: self.export_name.clone(),
