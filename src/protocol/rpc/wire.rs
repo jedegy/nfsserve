@@ -1,3 +1,22 @@
+//! RPC message framing and transmission as specified in RFC 1057 section 10.
+//!
+//! This module implements the Record Marking Standard for sending RPC messages
+//! over TCP connections. It provides:
+//!
+//! - Message fragmentation for large RPC messages
+//! - Proper message delimitation in stream-oriented transports
+//! - Asynchronous message processing
+//! - RPC call dispatching to appropriate protocol handlers
+//!
+//! The wire protocol implementation handles all the low-level details of:
+//! - Reading fragmentary messages and reassembling them
+//! - Writing record-marked fragments with appropriate headers
+//! - Managing socket communication channels
+//! - Processing incoming RPC calls
+//!
+//! This module is essential for maintaining proper message boundaries in TCP
+//! while providing efficient transmission of RPC messages of any size.
+
 use std::io::Cursor;
 use std::io::{Read, Write};
 
@@ -11,13 +30,32 @@ use tracing::{debug, error, trace, warn};
 use crate::protocol::xdr::{self, mount, nfs3, portmap, XDR};
 use crate::protocol::{nfs, rpc};
 
-// Information from RFC 5531
+// Information from RFC 5531 (ONC RPC v2)
 // https://datatracker.ietf.org/doc/html/rfc5531
+// And RFC 1057 (Original RPC)
+// https://datatracker.ietf.org/doc/html/rfc1057
 
+/// RPC program number for NFS Access Control Lists
 const NFS_ACL_PROGRAM: u32 = 100227;
+/// RPC program number for NFS ID Mapping
 const NFS_ID_MAP_PROGRAM: u32 = 100270;
+/// RPC program number for NFS Metadata
 const NFS_METADATA_PROGRAM: u32 = 200024;
 
+/// Processes a single RPC message
+///
+/// This function forms the core of the RPC message dispatcher. It:
+/// 1. Deserializes the incoming RPC message using XDR format
+/// 2. Validates the RPC version number (must be version 2)
+/// 3. Extracts authentication information if provided
+/// 4. Checks for retransmissions to ensure idempotent operation
+/// 5. Routes the call to the appropriate protocol handler (NFS, MOUNT, PORTMAP)
+/// 6. Tracks transaction completion state
+///
+/// This implementation follows RFC 1057 section 8 (Authentication) and
+/// section 11 (Record Marking Standard) for proper RPC message handling.
+///
+/// Returns true if a response was sent, false otherwise (for retransmissions).
 async fn handle_rpc(
     input: &mut impl Read,
     output: &mut impl Write,
@@ -86,24 +124,20 @@ async fn handle_rpc(
     }
 }
 
-/// RFC 1057 Section 10
-/// When RPC messages are passed on top of a byte stream transport
-/// protocol (like TCP), it is necessary to delimit one message from
-/// another in order to detect and possibly recover from protocol errors.
-/// This is called record marking (RM).  Sun uses this RM/TCP/IP
-/// transport for passing RPC messages on TCP streams.  One RPC message
-/// fits into one RM record.
+/// Reads a single record-marked fragment from a stream
 ///
-/// A record is composed of one or more record fragments.  A record
-/// fragment is a four-byte header followed by 0 to (2**31) - 1 bytes of
-/// fragment data.  The bytes encode an unsigned binary number; as with
-/// XDR integers, the byte order is from highest to lowest.  The number
-/// encodes two values -- a boolean which indicates whether the fragment
-/// is the last fragment of the record (bit value 1 implies the fragment
-/// is the last fragment) and a 31-bit unsigned binary value which is the
-/// length in bytes of the fragment's data.  The boolean value is the
-/// highest-order bit of the header; the length is the 31 low-order bits.
-/// (Note that this record specification is NOT in XDR standard form!)
+/// Implements the RFC 1057 section 10 (Record Marking Standard) for TCP transport.
+/// The record marking standard addresses the problem of delimiting records in a
+/// stream protocol like TCP by prefixing each record with a 4-byte header.
+///
+/// This function:
+/// 1. Reads the 4-byte header from the socket
+/// 2. Extracts the fragment length (lower 31 bits) and last-fragment flag (highest bit)
+/// 3. Reads exactly that many bytes from the socket
+/// 4. Appends the read data to the provided buffer
+///
+/// Returns true if this was the last fragment in the RPC record, false otherwise.
+/// This allows for reassembly of multi-fragment RPC messages.
 async fn read_fragment(
     socket: &mut DuplexStream,
     append_to: &mut Vec<u8>,
@@ -125,6 +159,21 @@ async fn read_fragment(
     Ok(is_last)
 }
 
+/// Writes data as record-marked fragments to a TCP stream
+///
+/// Implements the RFC 1057 section 10 (Record Marking Standard) for TCP transport.
+/// This standard enables RPC to utilize TCP as a transport while maintaining proper
+/// message boundaries essential for RPC semantics.
+///
+/// The function:
+/// 1. Divides large buffers into manageable fragments (maximum 2GB each)
+/// 2. Prefixes each fragment with a 4-byte header
+///    - The lower 31 bits contain the fragment length
+///    - The highest bit indicates if this is the last fragment (1=last, 0=more)
+/// 3. Writes both header and data to the socket
+///
+/// This ensures reliable transmission of RPC messages over TCP with proper
+/// message framing and enables receivers to allocate appropriate buffer space.
 pub async fn write_fragment(
     socket: &mut tokio::net::TcpStream,
     buf: &[u8],
@@ -169,9 +218,12 @@ pub async fn write_fragment(
 
 pub type SocketMessageType = Result<Vec<u8>, anyhow::Error>;
 
-/// The Socket Message Handler reads from a TcpStream and spawns off
-/// subtasks to handle each message. replies are queued into the
-/// reply_send_channel.
+/// Handles RPC message processing over a TCP connection
+///
+/// Receives record-marked RPC messages from a TCP stream, processes
+/// them asynchronously by dispatching to the appropriate protocol handlers,
+/// and manages the response flow. Implements the record marking protocol
+/// for reliable message delimitation over TCP.
 #[derive(Debug)]
 pub struct SocketMessageHandler {
     cur_fragment: Vec<u8>,
@@ -181,7 +233,13 @@ pub struct SocketMessageHandler {
 }
 
 impl SocketMessageHandler {
-    /// Creates a new SocketMessageHandler with the receiver for queued message replies
+    /// Creates a new SocketMessageHandler instance
+    ///
+    /// Initializes the handler with the provided RPC context and creates the
+    /// necessary communication channels. Returns the handler itself, a duplex
+    /// stream for writing to the socket, and a receiver for processed messages.
+    ///
+    /// This setup enables asynchronous processing of RPC messages.
     pub fn new(
         context: &rpc::Context,
     ) -> (
@@ -203,7 +261,12 @@ impl SocketMessageHandler {
         )
     }
 
-    /// Reads a fragment from the socket. This should be looped.
+    /// Reads and processes a fragment from the socket
+    ///
+    /// Reads a single record-marked fragment from the socket and appends it to
+    /// the current message buffer. If the fragment is the last one in the record,
+    /// spawns a task to process the complete RPC message and prepare a response.
+    /// Should be called in a loop to continuously process incoming messages.
     pub async fn read(&mut self) -> Result<(), anyhow::Error> {
         let is_last =
             read_fragment(&mut self.socket_receive_channel, &mut self.cur_fragment).await?;

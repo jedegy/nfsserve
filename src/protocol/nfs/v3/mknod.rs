@@ -1,3 +1,24 @@
+//! Implementation of the MKNOD procedure (procedure 11) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.11.
+//!
+//! The MKNOD procedure creates a special file of a specified type. Special files
+//! can be device files (character or block), FIFOs (named pipes), or sockets.
+//!
+//! The client specifies:
+//! - The directory file handle where the special file should be created
+//! - The name to be given to the special file
+//! - The type of the special file to be created (block, character, socket, or FIFO)
+//! - For block and character device files, the device number (major and minor numbers)
+//! - Initial attributes for the new special file
+//!
+//! On successful return, the server provides:
+//! - The file handle of the newly created special file
+//! - The attributes of the newly created special file
+//! - The attributes of the directory before and after the operation (weak cache consistency)
+//!
+//! This procedure is primarily used by Unix clients to create device files and
+//! other special file types.
+
 use std::io::{Read, Write};
 
 use tracing::{debug, error, warn};
@@ -6,6 +27,22 @@ use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 use crate::vfs;
 
+/// Handles NFSv3 MKNOD procedure (procedure 11)
+///
+/// MKNOD creates a special file (device, FIFO, or socket).
+/// Takes directory handle, name, file type and device specifications.
+/// Returns file handle and attributes of the newly created special file.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the MKNOD arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_mknod(
     xid: u32,
     input: &mut impl Read,

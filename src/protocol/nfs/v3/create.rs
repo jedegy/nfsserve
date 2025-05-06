@@ -1,3 +1,24 @@
+//! Implementation of the CREATE procedure (procedure 8) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.8.
+//!
+//! The CREATE procedure creates a regular file in a specified directory.
+//! The client specifies:
+//! - The file handle of the parent directory
+//! - The name for the new file
+//! - The method of creation (UNCHECKED, GUARDED, or EXCLUSIVE)
+//! - The initial attributes for the new file (for UNCHECKED and GUARDED modes)
+//! - A creation verifier (for EXCLUSIVE mode)
+//!
+//! The three creation methods are:
+//! - UNCHECKED: Creates the file or updates attributes if it exists
+//! - GUARDED: Creates the file only if it doesn't exist
+//! - EXCLUSIVE: Creates the file only if it doesn't exist, using a unique verifier
+//!
+//! On successful return, the server provides:
+//! - The file handle of the new file
+//! - The attributes of the new file
+//! - The attributes of the parent directory before and after the operation (weak cache consistency)
+
 use std::io::{Read, Write};
 
 use tracing::{debug, error, warn};
@@ -6,6 +27,22 @@ use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 use crate::vfs;
 
+/// Handles NFSv3 CREATE procedure (procedure 8)
+///
+/// CREATE creates a regular file in a specified directory.
+/// It supports three modes: UNCHECKED, GUARDED, and EXCLUSIVE.
+/// Returns file handle and attributes of the newly created file.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the CREATE arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_create(
     xid: u32,
     input: &mut impl Read,

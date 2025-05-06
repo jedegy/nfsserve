@@ -1,3 +1,24 @@
+//! Implementation of the FSSTAT procedure (procedure 18) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.18.
+//!
+//! The FSSTAT procedure retrieves volatile file system state information.
+//! This differs from the FSINFO procedure which returns static information about
+//! the file system. FSSTAT provides statistics about total and free space, total
+//! and free file slots, and other dynamic information.
+//!
+//! The client specifies:
+//! - A file handle representing the file system (typically the root file handle)
+//!
+//! On successful return, the server provides:
+//! - The attributes of the file handle provided
+//! - Total bytes in the file system
+//! - Free bytes in the file system
+//! - Available bytes to the user (accounting for quotas)
+//! - Total file slots in the file system
+//! - Free file slots in the file system
+//! - Available file slots to the user (accounting for quotas)
+//! - How long this information remains valid (invarsec)
+
 use std::io::{Read, Write};
 
 use tracing::debug;
@@ -5,6 +26,22 @@ use tracing::debug;
 use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 
+/// Handles NFSv3 FSSTAT procedure (procedure 18)
+///
+/// FSSTAT retrieves volatile file system state information.
+/// Takes a file handle representing the file system.
+/// Returns file attributes and dynamic file system information.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the FSSTAT arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_fsstat(
     xid: u32,
     input: &mut impl Read,

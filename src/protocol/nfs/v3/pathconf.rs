@@ -1,3 +1,23 @@
+//! Implementation of the PATHCONF procedure (procedure 20) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.20.
+//!
+//! The PATHCONF procedure retrieves the pathconf information for a file or
+//! directory. This information is typically used by clients to determine
+//! various file system characteristics to properly format and display file names
+//! and paths.
+//!
+//! The client specifies:
+//! - A file handle for a file or directory
+//!
+//! On successful return, the server provides:
+//! - The file attributes for the file handle provided
+//! - Maximum link count for a file (number of hard links)
+//! - Maximum length for a file name
+//! - Whether the file system enforces file name truncation or returns errors for long names
+//! - Whether the file system restricts ownership changes
+//! - Whether file names are case-insensitive
+//! - Whether file names are case-preserving
+
 use std::io::{Read, Write};
 
 use tracing::debug;
@@ -5,6 +25,22 @@ use tracing::debug;
 use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 
+/// Handles NFSv3 PATHCONF procedure (procedure 20)
+///
+/// PATHCONF retrieves file system path configuration information.
+/// Takes a file handle representing the file system.
+/// Returns parameters like maximum link count, maximum name length, etc.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the PATHCONF arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_pathconf(
     xid: u32,
     input: &mut impl Read,

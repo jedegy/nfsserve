@@ -1,6 +1,17 @@
-// Basic types and constants for NFS3 protocol from RFC
+//! The module defines XDR data types and constants for Network File System (NFS)
+//! version 3, as defined in RFC 1813.
+//!
+//! NFS version 3 is a stateless distributed file system protocol
+//! that provides transparent remote access to shared file systems over a network.
+//! This implementation provides the data structures needed for encoding and
+//! decoding NFS version 3 protocol messages using XDR (External Data Representation).
+//!
+//! This module defines the constants, basic data types, and complex structures
+//! that form the foundation of the NFSv3 protocol as specified in RFC 1813.
+
+// Allow unused code since we're implementing the full NFS3 protocol specification
 #![allow(dead_code)]
-// And its nice to keep the original RFC names and case
+// Preserve original RFC naming conventions for consistency with the specification
 #![allow(non_camel_case_types)]
 
 use std::fmt;
@@ -20,9 +31,9 @@ pub mod file;
 pub mod fs;
 
 // Section 2.2 Constants
-/// These are the RPC constants needed to call the NFS Version 3
-///  service.  They are given in decimal.
+/// The RPC program number for NFS version 3 service.
 pub const PROGRAM: u32 = 100003;
+/// The version number for NFS version 3 protocol.
 pub const VERSION: u32 = 3;
 
 // Section 2.4 Sizes
@@ -43,14 +54,21 @@ pub const NFS3_CREATEVERFSIZE: u32 = 8;
 pub const NFS3_WRITEVERFSIZE: u32 = 8;
 
 // Section 2.5 Basic Data Types
+/// A string type used in NFS for filenames and paths.
+///
+/// This is essentially a vector of bytes, but with specific
+/// formatting for NFS protocol requirements.
 #[allow(non_camel_case_types)]
 #[derive(Default, Clone)]
 pub struct nfsstring(pub Vec<u8>);
 
 impl nfsstring {
+    /// Returns the length of the string in bytes.
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    /// Returns true if the string is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -103,50 +121,102 @@ impl XDR for nfsstring {
     }
 }
 
+/// Procedure numbers for NFS version 3 protocol.
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 pub enum NFSProgram {
+    /// Do nothing - used primarily for performance measurement
     NFSPROC3_NULL = 0,
+    /// Get file attributes
     NFSPROC3_GETATTR = 1,
+    /// Set file attributes
     NFSPROC3_SETATTR = 2,
+    /// Look up filename
     NFSPROC3_LOOKUP = 3,
+    /// Check file access permission
     NFSPROC3_ACCESS = 4,
+    /// Read from symbolic link
     NFSPROC3_READLINK = 5,
+    /// Read from file
     NFSPROC3_READ = 6,
+    /// Write to file
     NFSPROC3_WRITE = 7,
+    /// Create file
     NFSPROC3_CREATE = 8,
+    /// Create directory
     NFSPROC3_MKDIR = 9,
+    /// Create symbolic link
     NFSPROC3_SYMLINK = 10,
+    /// Create special device
     NFSPROC3_MKNOD = 11,
+    /// Remove file
     NFSPROC3_REMOVE = 12,
+    /// Remove directory
     NFSPROC3_RMDIR = 13,
+    /// Rename file or directory
     NFSPROC3_RENAME = 14,
+    /// Create hard link
     NFSPROC3_LINK = 15,
+    /// Read directory
     NFSPROC3_READDIR = 16,
+    /// Extended read directory
     NFSPROC3_READDIRPLUS = 17,
+    /// Get file system statistics
     NFSPROC3_FSSTAT = 18,
+    /// Get file system information
     NFSPROC3_FSINFO = 19,
+    /// Get path configuration
     NFSPROC3_PATHCONF = 20,
+    /// Commit cached data
     NFSPROC3_COMMIT = 21,
+    /// Invalid procedure
     INVALID = 22,
 }
 
+/// Opaque byte type as defined in RFC 1813 section 2.5
+/// Used for binary data like file handles and verifiers
 pub type opaque = u8;
+/// Filename type as defined in RFC 1813 section 2.5
+/// String used for a component of a pathname
 pub type filename3 = nfsstring;
+/// Path type as defined in RFC 1813 section 2.5
+/// String used for a pathname or a symbolic link contents
 pub type nfspath3 = nfsstring;
+/// File identifier as defined in RFC 1813 section 2.5
+/// A unique number that identifies a file within a filesystem
 pub type fileid3 = u64;
+/// Directory entry position cookie as defined in RFC 1813 section 2.5
+/// Used in READDIR and READDIRPLUS operations for iteration
 pub type cookie3 = u64;
+/// Cookie verifier for directory operations as defined in RFC 1813 section 2.5
+/// Used to detect when a directory being read has changed
 pub type cookieverf3 = [opaque; NFS3_COOKIEVERFSIZE as usize];
+/// Create verifier for exclusive file creation as defined in RFC 1813 section 2.5
+/// Used in CREATE operations with EXCLUSIVE mode to ensure uniqueness
 pub type createverf3 = [opaque; NFS3_CREATEVERFSIZE as usize];
+/// Write verifier for asynchronous writes as defined in RFC 1813 section 2.5
+/// Used to detect server reboots between asynchronous WRITE and COMMIT operations
 pub type writeverf3 = [opaque; NFS3_WRITEVERFSIZE as usize];
+/// User ID as defined in RFC 1813 section 2.5
+/// Identifies the owner of a file
 pub type uid3 = u32;
+/// Group ID as defined in RFC 1813 section 2.5
+/// Identifies the group ownership of a file
 pub type gid3 = u32;
+/// File size in bytes as defined in RFC 1813 section 2.5
 pub type size3 = u64;
+/// File offset in bytes as defined in RFC 1813 section 2.5
+/// Used to specify a position within a file
 pub type offset3 = u64;
+/// File mode bits as defined in RFC 1813 section 2.5
+/// Contains file type and permission bits
 pub type mode3 = u32;
+/// Count of bytes or entries as defined in RFC 1813 section 2.5
+/// Used for various counting purposes in NFS operations
 pub type count3 = u32;
 
+/// Status codes returned by NFS version 3 operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
@@ -245,10 +315,10 @@ pub enum nfsstat3 {
     /// respond to client with this error.
     NFS3ERR_JUKEBOX = 10008,
 }
-
 XDREnumSerde!(nfsstat3);
 
-/// File Type
+/// File type enumeration as defined in RFC 1813 section 2.3.5
+/// Determines the type of a file system object
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
@@ -271,35 +341,37 @@ pub enum ftype3 {
 }
 XDREnumSerde!(ftype3);
 
-/// Device Number information. Ex: Major / Minor device
+/// Special device information for character and block special devices
+/// Contains the major and minor device numbers
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
-#[repr(C)]
 pub struct specdata3 {
+    /// Major device number
     pub specdata1: u32,
+    /// Minor device number
     pub specdata2: u32,
 }
 XDRStruct!(specdata3, specdata1, specdata2);
 
-/// File Handle information
+/// The NFS version 3 file handle
+/// The file handle uniquely identifies a file or directory on the server
+/// The server is responsible for the internal format and interpretation of the file handle
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct nfs_fh3 {
+    /// Raw file handle data (up to NFS3_FHSIZE bytes)
     pub data: Vec<u8>,
 }
 XDRStruct!(nfs_fh3, data);
-#[allow(clippy::derivable_impls)]
-impl Default for nfs_fh3 {
-    fn default() -> nfs_fh3 {
-        nfs_fh3 { data: Vec::new() }
-    }
-}
 
+/// NFS version 3 time structure
+/// Used for file timestamps (access, modify, change)
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
-#[repr(C)]
 pub struct nfstime3 {
+    /// Seconds since Unix epoch (January 1, 1970)
     pub seconds: u32,
+    /// Nanoseconds (0-999999999)
     pub nseconds: u32,
 }
 XDRStruct!(nfstime3, seconds, nseconds);
@@ -310,132 +382,202 @@ impl From<nfstime3> for filetime::FileTime {
     }
 }
 
+/// File attributes in NFS version 3 as defined in RFC 1813 section 2.3.5
+/// Contains all the standard attributes associated with a file or directory
+/// in the NFS version 3 protocol
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct fattr3 {
+    /// Type of file (regular, directory, symbolic link, etc.)
     pub ftype: ftype3,
+    /// File access mode bits. Contains the standard Unix file
+    /// permissions and file type information
     pub mode: mode3,
+    /// Number of hard links to the file. Indicates how many
+    /// directory entries reference this file
     pub nlink: u32,
+    /// User ID of the file owner
     pub uid: uid3,
+    /// Group ID of the file's group
     pub gid: gid3,
+    /// File size in bytes. For regular files, this is the size
+    /// of the file data. For directories, this value is implementation-dependent
     pub size: size3,
+    /// Size in bytes actually allocated to the file on the server's file system
+    /// This may be different from size due to block allocation policies
     pub used: size3,
+    /// Device ID information for character or block special files
+    /// Contains major and minor numbers for the device
     pub rdev: specdata3,
+    /// File system identifier. Uniquely identifies the file system
+    /// containing the file
     pub fsid: u64,
+    /// File identifier (inode number). Uniquely identifies the file
+    /// within its file system
     pub fileid: fileid3,
+    /// Time of last access to the file data
     pub atime: nfstime3,
+    /// Time of last modification to the file data
     pub mtime: nfstime3,
+    /// Time of last status change (modification to the file's attributes)
     pub ctime: nfstime3,
 }
 XDRStruct!(
     fattr3, ftype, mode, nlink, uid, gid, size, used, rdev, fsid, fileid, atime, mtime, ctime
 );
 
+/// Attributes used in weak cache consistency checking as defined in RFC 1813 section 2.3.8
+/// These attributes are used to detect changes to a file by comparing
+/// values before and after operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct wcc_attr {
+    /// File size in bytes
     pub size: size3,
+    /// Last modification time of the file
     pub mtime: nfstime3,
+    /// Last status change time of the file
     pub ctime: nfstime3,
 }
 XDRStruct!(wcc_attr, size, mtime, ctime);
 
+/// Pre-operation attributes for weak cache consistency as defined in RFC 1813 section 2.3.8
+/// These attributes represent the file state before an operation was performed
+/// Used together with post-operation attributes to determine if file state changed
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 #[repr(u32)]
 pub enum pre_op_attr {
     #[default]
+    /// No attributes available
     Void,
+    /// Attributes are available
     attributes(wcc_attr),
 }
 XDRBoolUnion!(pre_op_attr, attributes, wcc_attr);
 
+/// Post-operation attributes for file information as defined in RFC 1813 section 2.3.8
+/// These attributes represent the file state after an operation was performed
+/// Returned in almost all NFS procedure responses to allow clients to maintain
+/// a consistent cache of file attributes
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 #[repr(u32)]
 pub enum post_op_attr {
     #[default]
+    /// No attributes available
     Void,
+    /// Attributes are available
     attributes(fattr3),
 }
 XDRBoolUnion!(post_op_attr, attributes, fattr3);
 
+/// Weak cache consistency data as defined in RFC 1813 section 2.3.8
+/// Contains file attributes before and after an operation
+/// This data structure is returned by operations that modify file attributes
+/// to allow clients to update their cached attributes appropriately
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct wcc_data {
+    /// File attributes before operation
     pub before: pre_op_attr,
+    /// File attributes after operation
     pub after: post_op_attr,
 }
 XDRStruct!(wcc_data, before, after);
 
+/// Optional file handle response
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
 #[repr(u32)]
 pub enum post_op_fh3 {
     #[default]
+    /// No file handle
     Void,
+    /// File handle is available
     handle(nfs_fh3),
 }
 XDRBoolUnion!(post_op_fh3, handle, nfs_fh3);
 
-// Атрибуты и структуры для установки атрибутов
+/// Method for setting file times in SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-/// This enum is only used as a discriminant for set_atime / set_mtime
-/// and should not be used directly.
 pub enum _time_how {
+    /// Don't change time
     DONT_CHANGE = 0,
+    /// Set to server's current time
     SET_TO_SERVER_TIME = 1,
+    /// Set to time provided by client
     SET_TO_CLIENT_TIME = 2,
 }
 XDREnumSerde!(_time_how);
 
+/// Optional file mode for SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
 pub enum set_mode3 {
+    /// Don't change mode
     Void,
+    /// Set to specified mode
     mode(mode3),
 }
 XDRBoolUnion!(set_mode3, mode, mode3);
 
+/// Optional user ID for SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
 pub enum set_uid3 {
+    /// Don't change user ID
     Void,
+    /// Set to specified user ID
     uid(uid3),
 }
 XDRBoolUnion!(set_uid3, uid, uid3);
 
+/// Optional group ID for SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
 pub enum set_gid3 {
+    /// Don't change group ID
     Void,
+    /// Set to specified group ID
     gid(gid3),
 }
 XDRBoolUnion!(set_gid3, gid, gid3);
 
+/// Optional file size for SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
 pub enum set_size3 {
+    /// Don't change file size
     Void,
+    /// Set to specified size
     size(size3),
 }
 XDRBoolUnion!(set_size3, size, size3);
 
+/// Specifies how to modify the last access time (atime) during a SETATTR operation.
+/// This enum allows the client to either:
+/// - Leave the atime unchanged (DONT_CHANGE)
+/// - Set it to the server's current time (SET_TO_SERVER_TIME)
+/// - Set it to a specific client-provided time (SET_TO_CLIENT_TIME)
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
-/// discriminant is time_how
 pub enum set_atime {
+    /// Don't modify the file's last access time
     DONT_CHANGE,
+    /// Set the file's last access time to the server's current time
     SET_TO_SERVER_TIME,
+    /// Set the file's last access time to the specified time value
     SET_TO_CLIENT_TIME(nfstime3),
 }
+
 impl XDR for set_atime {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         match self {
@@ -450,36 +592,53 @@ impl XDR for set_atime {
                 v.serialize(dest)?;
             }
         }
+
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut c: u32 = 0;
         c.deserialize(src)?;
-        if c == 0 {
-            *self = set_atime::DONT_CHANGE;
-        } else if c == 1 {
-            *self = set_atime::SET_TO_SERVER_TIME;
-        } else if c == 2 {
-            let mut r = nfstime3::default();
-            r.deserialize(src)?;
-            *self = set_atime::SET_TO_CLIENT_TIME(r);
-        } else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid value for set_atime",
-            ));
+        match c {
+            0 => {
+                *self = set_atime::DONT_CHANGE;
+            }
+            1 => {
+                *self = set_atime::SET_TO_SERVER_TIME;
+            }
+            2 => {
+                let mut time = nfstime3::default();
+                time.deserialize(src)?;
+                *self = set_atime::SET_TO_CLIENT_TIME(time);
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid set_atime value: {}", c),
+                ));
+            }
         }
+
         Ok(())
     }
 }
 
+/// Specifies how to modify the last modification time (mtime) during a SETATTR operation.
+/// This enum allows the client to either:
+/// - Leave the mtime unchanged
+/// - Set it to the server's current time
+/// - Set it to a specific client-provided time
+///
+/// The discriminant value follows the time_how enumeration from RFC 1813
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
-/// discriminant is time_how
 pub enum set_mtime {
+    /// Keep the current modification time unchanged
     DONT_CHANGE,
+    /// Update the modification time to the server's current time
     SET_TO_SERVER_TIME,
+    /// Set the modification time to a specific timestamp provided by the client
     SET_TO_CLIENT_TIME(nfstime3),
 }
 
@@ -497,40 +656,56 @@ impl XDR for set_mtime {
                 v.serialize(dest)?;
             }
         }
+
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut c: u32 = 0;
         c.deserialize(src)?;
-        if c == 0 {
-            *self = set_mtime::DONT_CHANGE;
-        } else if c == 1 {
-            *self = set_mtime::SET_TO_SERVER_TIME;
-        } else if c == 2 {
-            let mut r = nfstime3::default();
-            r.deserialize(src)?;
-            *self = set_mtime::SET_TO_CLIENT_TIME(r);
-        } else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid value for set_mtime",
-            ));
+        match c {
+            0 => {
+                *self = set_mtime::DONT_CHANGE;
+            }
+            1 => {
+                *self = set_mtime::SET_TO_SERVER_TIME;
+            }
+            2 => {
+                let mut time = nfstime3::default();
+                time.deserialize(src)?;
+                *self = set_mtime::SET_TO_CLIENT_TIME(time);
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid set_mtime value: {}", c),
+                ));
+            }
         }
+
         Ok(())
     }
 }
 
+/// Set of file attributes to change in SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 pub struct sattr3 {
+    /// File mode (permissions)
     pub mode: set_mode3,
+    /// User ID of owner
     pub uid: set_uid3,
+    /// Group ID of owner
     pub gid: set_gid3,
+    /// File size
     pub size: set_size3,
+    /// Last access time
     pub atime: set_atime,
+    /// Last modification time
     pub mtime: set_mtime,
 }
 XDRStruct!(sattr3, mode, uid, gid, size, atime, mtime);
+
 impl Default for sattr3 {
     fn default() -> sattr3 {
         sattr3 {
@@ -544,61 +719,84 @@ impl Default for sattr3 {
     }
 }
 
+/// Arguments for directory operations (specifying directory handle and name)
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
 pub struct diropargs3 {
+    /// Directory file handle
     pub dir: nfs_fh3,
+    /// Name within the directory
     pub name: filename3,
 }
 XDRStruct!(diropargs3, dir, name);
 
+/// Data for creating a symbolic link
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
 pub struct symlinkdata3 {
+    /// Attributes for the symbolic link
     pub symlink_attributes: sattr3,
+    /// Target path for the symbolic link
     pub symlink_data: nfspath3,
 }
 XDRStruct!(symlinkdata3, symlink_attributes, symlink_data);
 
-/// We define the root handle here
+/// Gets the root file handle for mounting
 pub fn get_root_mount_handle() -> Vec<u8> {
     vec![0]
 }
 
-// Константы доступа
+/// Access permission to read file data or read a directory as defined in RFC 1813 section 3.3.4
 pub const ACCESS3_READ: u32 = 0x0001;
+/// Access permission to look up names in a directory as defined in RFC 1813 section 3.3.4
 pub const ACCESS3_LOOKUP: u32 = 0x0002;
+/// Access permission to modify the contents of an existing file as defined in RFC 1813 section 3.3.4
 pub const ACCESS3_MODIFY: u32 = 0x0004;
+/// Access permission to grow the file's size or extend a directory by adding entries
+/// as defined in RFC 1813 section 3.3.4
 pub const ACCESS3_EXTEND: u32 = 0x0008;
+/// Access permission to delete a file or directory entry as defined in RFC 1813 section 3.3.4
 pub const ACCESS3_DELETE: u32 = 0x0010;
+/// Access permission to execute a file or traverse a directory as defined in RFC 1813 section 3.3.4
 pub const ACCESS3_EXECUTE: u32 = 0x0020;
 
+/// File creation modes for CREATE operations
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 pub enum createmode3 {
+    /// Normal file creation - doesn't error if file exists
     #[default]
     UNCHECKED = 0,
+    /// Return error if file exists
     GUARDED = 1,
+    /// Use exclusive create mechanism (with verifier)
     EXCLUSIVE = 2,
 }
 XDREnumSerde!(createmode3);
 
+/// Guard condition for SETATTR operations based on ctime
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 #[repr(u32)]
 pub enum sattrguard3 {
     #[default]
+    /// No guard - unconditional change
     Void,
+    /// Only change if file's ctime matches provided value
     obj_ctime(nfstime3),
 }
 XDRBoolUnion!(sattrguard3, obj_ctime, nfstime3);
 
+/// Arguments for SETATTR operations
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
 pub struct SETATTR3args {
+    /// File handle for target file
     pub object: nfs_fh3,
+    /// New attributes to set
     pub new_attribute: sattr3,
+    /// Guard condition for atomic change
     pub guard: sattrguard3,
 }
 XDRStruct!(SETATTR3args, object, new_attribute, guard);

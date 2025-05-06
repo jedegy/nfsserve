@@ -1,3 +1,23 @@
+//! Implementation of the COMMIT procedure (procedure 21) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.21.
+//!
+//! The COMMIT procedure forces or flushes data to stable storage that was previously
+//! written with a WRITE procedure call with the stable flag set to UNSTABLE.
+//!
+//! The client specifies:
+//! - The file handle of the file to which data is to be flushed
+//! - The offset within the file where flushing should begin
+//! - The count of bytes to flush (0 means flush all data from the offset to the end of file)
+//!
+//! This procedure implements a two-phase commit strategy:
+//! 1. Client sends WRITE requests with unstable flag to improve performance
+//! 2. Client later sends COMMIT to ensure data durability
+//!
+//! On successful return, the server provides:
+//! - The file attributes before and after the operation
+//! - A write verifier that the client can compare with the one from previous WRITEs
+//!   to detect server reboots that might have lost uncommitted data
+
 use std::io::{Read, Write};
 
 use tracing::debug;
@@ -5,6 +25,22 @@ use tracing::debug;
 use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 
+/// Handles NFSv3 COMMIT procedure (procedure 21)
+///
+/// COMMIT forces or flushes cached data to stable storage.
+/// It takes a file handle, starting offset and byte count to commit.
+/// Returns file attributes and write verifier after the operation.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the COMMIT arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_commit(
     xid: u32,
     input: &mut impl Read,

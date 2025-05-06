@@ -1,3 +1,31 @@
+//! Implementation of the SYMLINK procedure (procedure 10) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.10.
+//!
+//! The SYMLINK procedure creates a symbolic link in a directory. A symbolic link
+//! is a special type of file that contains a path name that clients can use to
+//! reference another file or directory, possibly on a different file system or server.
+//!
+//! The client specifies:
+//! - The file handle and filename for the directory and name of the link to be created
+//! - The path string that the symbolic link will contain
+//! - Attributes to set on the newly created symbolic link
+//!
+//! On successful return, the server provides:
+//! - The file handle of the newly created symbolic link
+//! - The attributes of the newly created symbolic link
+//! - The attributes of the directory before and after the operation (weak cache consistency)
+//!
+//! Note that the path contained in a symbolic link is not validated by the server and
+//! may point to a nonexistent file or a file on another server. The symbolic link
+//! target path resolves when the client accesses the link through a path traversal
+//! operation, typically via LOOKUP or READLINK procedures.
+//!
+//! Common errors include:
+//! - NFS3ERR_ROFS - If the file system is read-only
+//! - NFS3ERR_EXIST - If the target name already exists
+//! - NFS3ERR_ACCES - If the client doesn't have permission to create the symlink
+//! - NFS3ERR_NOSPC - If there is insufficient storage space
+
 use std::io::{Read, Write};
 
 use tracing::{debug, error, warn};
@@ -6,6 +34,32 @@ use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 use crate::vfs;
 
+/// Handles NFSv3 SYMLINK procedure (procedure 10)
+///
+/// SYMLINK creates a symbolic link to a specified target path.
+/// Takes directory handle, name for new link, and target path data.
+/// Returns file handle and attributes of the created symbolic link.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the SYMLINK arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
+///
+/// # Errors
+///
+/// Common errors include:
+/// - NFS3ERR_ROFS - If the file system is read-only
+/// - NFS3ERR_EXIST - If a file with the requested name already exists
+/// - NFS3ERR_ACCES - If permission is denied
+/// - NFS3ERR_NOSPC - If there is no space on the file system
+/// - NFS3ERR_NOTDIR - If the parent handle is not a directory
+/// - NFS3ERR_STALE - If the file handle is invalid
 pub async fn nfsproc3_symlink(
     xid: u32,
     input: &mut impl Read,

@@ -1,3 +1,20 @@
+//! Implementation of the MKDIR procedure (procedure 9) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.9.
+//!
+//! The MKDIR procedure creates a new directory in the specified parent directory.
+//! The client specifies:
+//! - The file handle of the parent directory
+//! - The name of the new directory
+//! - The initial attributes for the new directory
+//!
+//! On successful return, the server provides:
+//! - The file handle of the new directory
+//! - The attributes of the new directory
+//! - The attributes of the parent directory before and after the operation (weak cache consistency)
+//!
+//! This procedure fails if the parent directory is read-only, the name already exists,
+//! or the user doesn't have appropriate access permissions.
+
 use std::io::{Read, Write};
 
 use tracing::{debug, error, warn};
@@ -6,6 +23,22 @@ use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 use crate::vfs;
 
+/// Handles NFSv3 MKDIR procedure (procedure 9)
+///
+/// MKDIR creates a new directory.
+/// Takes parent directory handle, name for new directory and attributes.
+/// Returns file handle and attributes of the newly created directory.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the MKDIR arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_mkdir(
     xid: u32,
     input: &mut impl Read,

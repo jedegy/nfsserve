@@ -1,3 +1,42 @@
+//! NFSv3 (Network File System version 3) protocol implementation as specified in RFC 1813.
+//!
+//! This module implements all 21 procedure calls defined in the NFS version 3 protocol:
+//!
+//! 1. NULL - Do nothing (ping the server)
+//! 2. GETATTR - Get file attributes
+//! 3. SETATTR - Set file attributes
+//! 4. LOOKUP - Look up file name
+//! 5. ACCESS - Check access permission
+//! 6. READLINK - Read from symbolic link
+//! 7. READ - Read from file
+//! 8. WRITE - Write to file
+//! 9. CREATE - Create a file
+//! 10. MKDIR - Create a directory
+//! 11. SYMLINK - Create a symbolic link
+//! 12. MKNOD - Create a special device
+//! 13. REMOVE - Remove a file
+//! 14. RMDIR - Remove a directory
+//! 15. RENAME - Rename a file or directory
+//! 16. LINK - Create a hard link
+//! 17. READDIR - Read from directory
+//! 18. READDIRPLUS - Extended read from directory
+//! 19. FSSTAT - Get file system statistics
+//! 20. FSINFO - Get file system information
+//! 21. PATHCONF - Get path configuration
+//! 22. COMMIT - Commit cached data
+//!
+//! Each procedure is implemented in its own module and registered with the main
+//! dispatcher function (`handle_nfs`). The dispatcher validates the protocol version
+//! and routes incoming RPC requests to the appropriate handler based on the procedure number.
+//!
+//! NFSv3 offers several improvements over NFSv2, including:
+//! - Support for files larger than 2GB
+//! - Safe asynchronous writes with the COMMIT operation
+//! - More robust error reporting with detailed status codes
+//! - Support for 64-bit file sizes and offsets
+//! - Better attribute caching with the ACCESS procedure
+//! - Enhanced directory reading with READDIRPLUS
+
 use std::io::{Read, Write};
 
 use num_traits::cast::FromPrimitive;
@@ -50,6 +89,23 @@ use setattr::nfsproc3_setattr;
 use symlink::nfsproc3_symlink;
 use write::nfsproc3_write;
 
+/// Main handler for NFSv3 protocol
+///
+/// Dispatches NFSv3 RPC calls to appropriate procedure handlers based on procedure number.
+/// Validates protocol version and returns appropriate error for unsupported procedures.
+/// Acts as the central router for all NFS operations in the server.
+///
+/// # Arguments
+///
+/// * `xid` - Transaction ID from the RPC call
+/// * `call` - The RPC call body containing program, version, and procedure numbers
+/// * `input` - Input stream for reading procedure arguments
+/// * `output` - Output stream for writing procedure results
+/// * `context` - Server context containing the VFS and other state
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn handle_nfs(
     xid: u32,
     call: xdr::rpc::call_body,

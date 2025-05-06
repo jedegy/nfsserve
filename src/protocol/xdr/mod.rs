@@ -1,3 +1,12 @@
+//! The XDR (External Data Representation) module defines data structures and methods
+//! for serializing/deserializing data according to RFC 1014 standard.
+//!
+//! XDR provides machine-independent data representation format,
+//! which is critical for network protocols like NFS.
+//!
+//! All data structures that require serialization/deserialization
+//! for network transmission must implement the XDR trait.
+
 use std::io::{Read, Write};
 
 use byteorder::BigEndian;
@@ -8,17 +17,42 @@ pub mod nfs3;
 pub mod portmap;
 pub mod rpc;
 
+/// Type alias for the standard endianness used in XDR serialization (Big Endian).
 pub type XDREndian = BigEndian;
 
-/// See https://datatracker.ietf.org/doc/html/rfc1014
+/// The XDR trait defines methods for serializing and deserializing data structures
+/// according to the External Data Representation (XDR) standard defined in RFC 1014.
+///
+/// XDR provides a standard way of representing data in a machine-independent format,
+/// which is critical for network protocols like NFS.
+///
+/// All data structures that need to be serialized to or deserialized from
+/// the network must implement this trait.
 #[allow(clippy::upper_case_acronyms)]
 pub trait XDR {
+    /// Serializes the implementing type to the provided writer.
+    ///
+    /// # Arguments
+    /// * `dest` - A mutable reference to any type that implements Write.
+    ///
+    /// # Returns
+    /// * `std::io::Result<()>` - Ok(()) on success, or an error if serialization fails.
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()>;
+
+    /// Deserializes data from the provided reader into the implementing type.
+    ///
+    /// # Arguments
+    /// * `src` - A mutable reference to any type that implements Read.
+    ///
+    /// # Returns
+    /// * `std::io::Result<()>` - Ok(()) on success, or an error if deserialization fails.
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()>;
 }
 
-/// Serializes a basic enumeration.
-/// Casts everything as u32 BigEndian
+/// Macro for implementing XDR serialization and deserialization for enumerations.
+///
+/// This macro simplifies implementation of the XDR trait for enum types
+/// by providing standard serialization and deserialization as 32-bit integers.
 #[allow(non_camel_case_types)]
 #[macro_export]
 macro_rules! XDREnumSerde {
@@ -27,6 +61,7 @@ macro_rules! XDREnumSerde {
             fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
                 dest.write_u32::<$crate::xdr::XDREndian>(*self as u32)
             }
+
             fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
                 let r: u32 = src.read_u32::<$crate::xdr::XDREndian>()?;
                 if let Some(p) = FromPrimitive::from_u32(r) {
@@ -43,12 +78,16 @@ macro_rules! XDREnumSerde {
     };
 }
 
-/// Serializes a bool as a 4 byte big endian integer.
+/// XDR implementation for boolean values.
+///
+/// Booleans are serialized as 4-byte big endian integers
+/// where 0 represents false and any non-zero value represents true.
 impl XDR for bool {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         let val: u32 = *self as u32;
         dest.write_u32::<XDREndian>(val)
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let val: u32 = src.read_u32::<XDREndian>()?;
         *self = val > 0;
@@ -56,59 +95,79 @@ impl XDR for bool {
     }
 }
 
-/// Serializes a i32 as a 4 byte big endian integer.
+/// XDR implementation for 32-bit signed integers.
+///
+/// Integers are serialized as 4-byte big endian values.
 impl XDR for i32 {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         dest.write_i32::<XDREndian>(*self)
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         *self = src.read_i32::<XDREndian>()?;
         Ok(())
     }
 }
 
-/// Serializes a i64 as a 8 byte big endian integer.
+/// XDR implementation for 64-bit signed integers.
+///
+/// 64-bit integers are serialized as 8-byte big endian values.
 impl XDR for i64 {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         dest.write_i64::<XDREndian>(*self)
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         *self = src.read_i64::<XDREndian>()?;
         Ok(())
     }
 }
 
-/// Serializes a u32 as a 4 byte big endian integer.
+/// XDR implementation for 32-bit unsigned integers.
+///
+/// Unsigned 32-bit integers are serialized as 4-byte big endian values.
 impl XDR for u32 {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         dest.write_u32::<XDREndian>(*self)
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         *self = src.read_u32::<XDREndian>()?;
         Ok(())
     }
 }
 
-/// Serializes a u64 as a 8 byte big endian integer.
+/// XDR implementation for 64-bit unsigned integers.
+///
+/// Unsigned 64-bit integers are serialized as 8-byte big endian values.
 impl XDR for u64 {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         dest.write_u64::<XDREndian>(*self)
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         *self = src.read_u64::<XDREndian>()?;
         Ok(())
     }
 }
 
+/// XDR implementation for fixed-size byte arrays.
+///
+/// Fixed-size arrays are serialized as their raw bytes without length prefix.
 impl<const N: usize> XDR for [u8; N] {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         dest.write_all(self)
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         src.read_exact(self)
     }
 }
 
+/// XDR implementation for variable-length byte vectors.
+///
+/// Variable-length data is serialized with a 4-byte length prefix,
+/// followed by the actual data, and padded to a multiple of 4 bytes.
 impl XDR for Vec<u8> {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         assert!(self.len() < u32::MAX as usize);
@@ -123,6 +182,7 @@ impl XDR for Vec<u8> {
         }
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut length: u32 = 0;
         length.deserialize(src)?;
@@ -136,6 +196,9 @@ impl XDR for Vec<u8> {
     }
 }
 
+/// XDR implementation for vectors of 32-bit unsigned integers.
+///
+/// Serialized as a 4-byte length prefix followed by that many 4-byte integers.
 impl XDR for Vec<u32> {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         assert!(self.len() < u32::MAX as usize);
@@ -146,6 +209,7 @@ impl XDR for Vec<u32> {
         }
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut length: u32 = 0;
         length.deserialize(src)?;
@@ -157,6 +221,10 @@ impl XDR for Vec<u32> {
     }
 }
 
+/// Macro for implementing XDR serialization and deserialization for structs.
+///
+/// This macro simplifies implementation of the XDR trait for struct types
+/// by serializing or deserializing each field in sequence.
 #[allow(non_camel_case_types)]
 #[macro_export]
 macro_rules! XDRStruct {
@@ -169,6 +237,7 @@ macro_rules! XDRStruct {
                 $(self.$element.serialize(dest)?;)*
                 Ok(())
             }
+
             fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
                 $(self.$element.deserialize(src)?;)*
                 Ok(())
@@ -177,20 +246,19 @@ macro_rules! XDRStruct {
     };
 }
 
-/// This macro only handles XDR Unions of the form
-///       union pre_op_attr switch (bool attributes_follow) {
-///       case TRUE:
-///            wcc_attr  attributes;
-///       case FALSE:
-///            void;
-///       };
-/// This is translated to
-///       enum pre_op_attr  {
-///          Void,
-///          attributes(wcc_attr)
-///       }
-/// The serde methods can be generated with XDRBoolUnion(pre_op_attr, attributes, wcc_attr)
-/// The "true" type must have the Default trait
+/// Macro for implementing XDR serialization and deserialization for boolean unions.
+///
+/// This is specialized for XDR unions where a boolean discriminant selects between
+/// two cases: a void (empty) case and a case containing a value of some type.
+///
+/// # Example
+/// ```
+/// enum pre_op_attr {
+///     Void,
+///     attributes(wcc_attr)
+/// }
+/// XDRBoolUnion!(pre_op_attr, attributes, wcc_attr)
+/// ```
 #[allow(non_camel_case_types)]
 #[macro_export]
 macro_rules! XDRBoolUnion {
@@ -210,6 +278,7 @@ macro_rules! XDRBoolUnion {
                 }
                 Ok(())
             }
+
             fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
                 let mut c: bool = false;
                 c.deserialize(src)?;

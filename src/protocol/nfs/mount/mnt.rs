@@ -1,3 +1,15 @@
+//! Implementation of the MNT procedure (procedure 1) for MOUNT version 3 protocol
+//! as defined in RFC 1813 Appendix I section I.4.2.
+//!
+//! The MNT procedure establishes a mount point for an NFS client.
+//! It is used by NFS clients to:
+//! - Get the initial file handle for the root of a mounted file system
+//! - Validate that the server exports the requested path
+//! - Determine supported authentication flavors for the mount
+//!
+//! MNT takes a directory path as input and returns a file handle for that
+//! path and a list of acceptable authentication flavors if the mount is successful.
+
 use std::io::{Read, Write};
 
 use num_traits::cast::ToPrimitive;
@@ -6,6 +18,22 @@ use tracing::debug;
 use crate::protocol::rpc;
 use crate::protocol::xdr::{self, mount, XDR};
 
+/// Handles MOUNT protocol MNT procedure (procedure 1)
+///
+/// MNT establishes mount point for an NFS client.
+/// Takes a directory path to mount and validates it against exports.
+/// Returns file handle for the requested mount point and supported authentication flavors.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the directory path to mount
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing exports and VFS information
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn mountproc3_mnt(
     xid: u32,
     input: &mut impl Read,

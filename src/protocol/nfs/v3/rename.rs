@@ -1,3 +1,29 @@
+//! Implementation of the RENAME procedure (procedure 14) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.14.
+//!
+//! The RENAME procedure changes the name of a file system object in the directory
+//! hierarchy. The operation renames a file or directory, possibly by moving it to
+//! a different directory.
+//!
+//! The client specifies:
+//! - The file handle and filename identifying the source object
+//! - The file handle and filename identifying the target location
+//!
+//! On successful return, the server provides:
+//! - The attributes of the source directory before and after the operation
+//! - The attributes of the target directory before and after the operation
+//!
+//! If the source and target directories are the same, the attributes returned for
+//! both are identical. If the target object already exists, it is removed as part
+//! of the renaming operation.
+//!
+//! Common errors:
+//! - NFS3ERR_NOENT: Source file/directory doesn't exist
+//! - NFS3ERR_ACCES: Permission denied
+//! - NFS3ERR_XDEV: Attempt to move between file systems
+//! - NFS3ERR_ROFS: Write attempted on read-only file system
+//! - NFS3ERR_NOTDIR: A component of path prefix is not a directory
+
 use std::io::{Read, Write};
 
 use tracing::{debug, error, warn};
@@ -6,6 +32,26 @@ use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 use crate::vfs;
 
+/// Handles NFSv3 RENAME procedure (procedure 14)
+///
+/// RENAME changes the name of a file system object.
+/// Takes source directory handle, source name, target directory handle, and target name.
+/// Returns attributes of both source and target directories before and after the operation.
+///
+/// This procedure implements atomic rename semantics - either the operation
+/// completes entirely or not at all. If a target object already exists, it is
+/// first removed and then the source object is renamed.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the RENAME arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_rename(
     xid: u32,
     input: &mut impl Read,

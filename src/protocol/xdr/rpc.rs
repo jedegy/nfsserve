@@ -1,6 +1,10 @@
-// this is just a complete enumeration of everything in the RFC
+//! This module provides data structures for the Remote Procedure Call (RPC) protocol
+//! as defined in RFC 1057. These structures handle serialization and deserialization
+//! of RPC messages between client and server.
+
+// Allow unused code since we implement the complete RFC specification
 #![allow(dead_code)]
-// And its nice to keep the original RFC names and case
+// Keep original RFC naming conventions for consistency with the specification
 #![allow(non_camel_case_types)]
 
 use std::io::{Read, Write};
@@ -11,131 +15,145 @@ use num_traits::cast::FromPrimitive;
 
 use super::*;
 
-// Transcribed from RFC 1057
-
+/// This is only defined as the discriminant for rpc_body and should not
+/// be used directly
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-/// This is only defined as the discriminant for rpc_body and should not
-/// be used directly
 pub enum _msg_type {
+    /// The message is a call to a remote procedure
     CALL = 0,
+    /// The message is a reply from a remote procedure
     REPLY = 1,
 }
 XDREnumSerde!(_msg_type);
 
+/// This is only defined as the discriminant for reply_body and should not
+/// be used directly
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-/// This is only defined as the discriminant for reply_body and should not
-/// be used directly
 pub enum _reply_stat {
+    /// The call was accepted and processed
     MSG_ACCEPTED = 0,
+    /// The call was denied
     MSG_DENIED = 1,
 }
 XDREnumSerde!(_reply_stat);
 
+/// Status codes for accepted replies, indicating the outcome of the procedure call
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-/// This is only defined as the discriminant for accept_body and should not
-/// be used directly
 pub enum _accept_stat {
-    /// RPC executed successfully
+    /// The RPC call completed successfully and returned a valid result
     SUCCESS = 0,
-    /// remote hasn't exported program
+    /// The requested program number is not available on this server
     PROG_UNAVAIL = 1,
-    /// remote can't support version #
+    /// The requested program version is not supported by the server
     PROG_MISMATCH = 2,
-    /// program can't support procedure
+    /// The requested procedure number is not implemented by this program
     PROC_UNAVAIL = 3,
-    /// procedure can't decode params
+    /// The server could not decode the procedure arguments
     GARBAGE_ARGS = 4,
 }
 XDREnumSerde!(_accept_stat);
 
+/// Status codes for denied replies, indicating why the call was denied
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-/// This is only defined as the discriminant for reject_body and should not
-/// be used directly
 pub enum _reject_stat {
-    /// RPC version number != 2
+    /// The RPC version number in the request does not match the server's supported version (version 2)
     RPC_MISMATCH = 0,
-    /// remote can't authenticate caller
+    /// The server was unable to authenticate the client's credentials or verify the request signature
     AUTH_ERROR = 1,
 }
 XDREnumSerde!(_reject_stat);
 
+/// Authentication status codes indicating why authentication failed
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-///   Why authentication failed
 pub enum auth_stat {
-    /// bad credentials (seal broken)
+    /// Invalid credentials provided by client (checksum/signature verification failed)
     #[default]
     AUTH_BADCRED = 1,
-    /// client must begin new session
+    /// Credentials rejected - client needs to establish a new session
     AUTH_REJECTEDCRED = 2,
-    /// bad verifier (seal broken)    
+    /// Invalid verifier provided by client (checksum/signature verification failed)
     AUTH_BADVERF = 3,
-    /// verifier expired or replayed  
+    /// Verifier rejected due to expiration or replay attempt
     AUTH_REJECTEDVERF = 4,
-    /// rejected for security reasons
+    /// Authentication mechanism too weak for requested operation
     AUTH_TOOWEAK = 5,
 }
 XDREnumSerde!(auth_stat);
 
+/// Authentication flavor (mechanism) identifiers for RPC
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 #[non_exhaustive]
 pub enum auth_flavor {
+    /// No authentication
     AUTH_NULL = 0,
+    /// UNIX-style authentication (uid/gid)
     AUTH_UNIX = 1,
+    /// Short-form authentication
     AUTH_SHORT = 2,
-    AUTH_DES = 3, /* and more to be defined */
+    /// DES authentication
+    AUTH_DES = 3,
+    /* and more to be defined */
 }
 XDREnumSerde!(auth_flavor);
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
+/// UNIX-style credentials used for authentication
 pub struct auth_unix {
-    stamp: u32,
-    machinename: Vec<u8>,
-    uid: u32,
-    gid: u32,
-    gids: Vec<u32>,
+    /// Timestamp to prevent replay attacks
+    pub stamp: u32,
+    /// The name of the client machine
+    pub machinename: Vec<u8>,
+    /// The effective user ID of the caller
+    pub uid: u32,
+    /// The effective group ID of the caller
+    pub gid: u32,
+    /// A list of additional group IDs for the caller
+    pub gids: Vec<u32>,
 }
 XDRStruct!(auth_unix, stamp, machinename, uid, gid, gids);
 
-///Provisions for authentication of caller to service and vice-versa are
-///provided as a part of the RPC protocol.  The call message has two
-///authentication fields, the credentials and verifier.  The reply
-///message has one authentication field, the response verifier.  The RPC
-///protocol specification defines all three fields to be the following
-///opaque type (in the eXternal Data Representation (XDR) language [9]):
+/// Authentication data structure used in RPC protocol for both client and server authentication.
 ///
-///   In other words, any "opaque_auth" structure is an "auth_flavor"
-///enumeration followed by bytes which are opaque to (uninterpreted by)
-///the RPC protocol implementation.
+/// The RPC protocol provides bidirectional authentication between caller and service:
+/// - Call messages contain two auth fields: credentials and verifier
+/// - Reply messages contain one auth field: response verifier
 ///
-///The interpretation and semantics of the data contained within the
-///authentication fields is specified by individual, independent
-///authentication protocol specifications.  (Section 9 defines the
-///various authentication protocols.)
+/// Each auth field is represented as an `opaque_auth` structure containing:
+/// - An `auth_flavor` enum identifying the authentication mechanism
+/// - Opaque bytes containing the auth data, interpreted based on the mechanism
 ///
-///If authentication parameters were rejected, the reply message
-///contains information stating why they were rejected.
+/// The actual authentication data format and validation is defined by the specific
+/// authentication protocol being used (e.g. AUTH_UNIX, AUTH_DES etc).
+///
+/// If authentication fails, the reply message will include details about why the
+/// auth parameters were rejected.
+///
+/// Opaque authentication data structure as defined in RFC 1057
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
 pub struct opaque_auth {
+    /// The authentication mechanism being used
     pub flavor: auth_flavor,
+    /// The opaque authentication data associated with that mechanism
     pub body: Vec<u8>,
 }
 XDRStruct!(opaque_auth, flavor, body);
+
 impl Default for opaque_auth {
     fn default() -> opaque_auth {
         opaque_auth {
@@ -145,28 +163,37 @@ impl Default for opaque_auth {
     }
 }
 
+/// RPC message structure as defined in RFC 1057.
+///
+/// Each RPC message begins with a transaction identifier (xid) followed by a
+/// discriminated union containing either a CALL or REPLY message body.
+///
+/// The xid serves several purposes:
+/// - Clients use it to match REPLY messages with their corresponding CALL messages
+/// - Servers use it to detect retransmitted requests
+/// - The xid in a REPLY always matches the xid from the initiating CALL
+///
+/// Note: The xid is not a sequence number and should not be treated as such by servers.
+/// It is only used for request/response matching and duplicate detection.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
-///All messages start with a transaction identifier, xid, followed by a
-///two-armed discriminated union.  The union's discriminant is a
-///msg_type which switches to one of the two types of the message.  The
-///xid of a REPLY message always matches that of the initiating CALL
-///message.  NB: The xid field is only used for clients matching reply
-///messages with call messages or for servers detecting retransmissions;
-///the service side cannot treat this id as any type of sequence number.
 pub struct rpc_msg {
+    /// Transaction identifier used to match calls and replies
     pub xid: u32,
+    /// The body of the RPC message (call or reply)
     pub body: rpc_body,
 }
 XDRStruct!(rpc_msg, xid, body);
 
+/// The body of an RPC message, which can be either a call or a reply
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug)]
 #[repr(u32)]
-/// Discriminant is msg_type
 pub enum rpc_body {
+    /// A call to a remote procedure
     CALL(call_body),
+    /// A reply from a remote procedure
     REPLY(reply_body),
 }
 
@@ -175,6 +202,7 @@ impl Default for rpc_body {
         rpc_body::CALL(call_body::default())
     }
 }
+
 impl XDR for rpc_body {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         match self {
@@ -200,81 +228,47 @@ impl XDR for rpc_body {
             let mut r = reply_body::default();
             r.deserialize(src)?;
             *self = rpc_body::REPLY(r);
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid message type in rpc_body: {}", c),
+            ));
         }
+
         Ok(())
     }
 }
 
+/// The body of an RPC call, containing all information needed for a remote procedure call
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
-
-///The RPC call message has three unsigned integer fields -- remote
-///program number, remote program version number, and remote procedure
-///number -- which uniquely identify the procedure to be called.
-///Program numbers are administered by some central authority (like
-///Sun).  Once implementors have a program number, they can implement
-///their remote program; the first implementation would most likely have
-///the version number 1.  Because most new protocols evolve, a version
-///field of the call message identifies which version of the protocol
-///the caller is using.  Version numbers make speaking old and new
-///protocols through the same server process possible.
-///
-///The procedure number identifies the procedure to be called.  These
-///numbers are documented in the specific program's protocol
-///specification.  For example, a file service's protocol specification
-///may state that its procedure number 5 is "read" and procedure number
-///12 is "write".
-///
-///Just as remote program protocols may change over several versions,
-///the actual RPC message protocol could also change.  Therefore, the
-///call message also has in it the RPC version number, which is always
-///equal to two for the version of RPC described here.
-///
-///The reply message to a request message has enough information to
-///distinguish the following error conditions:
-///
-///(1) The remote implementation of RPC does not speak protocol version
-///  2. The lowest and highest supported RPC version numbers are returned.
-///
-///(2) The remote program is not available on the remote system.
-///
-///(3) The remote program does not support the requested version number.
-///The lowest and highest supported remote program version numbers are
-///returned.
-///
-///(4) The requested procedure number does not exist.  (This is usually
-///a client side protocol or programming error.)
-///
-///(5) The parameters to the remote procedure appear to be garbage from
-///the server's point of view.  (Again, this is usually caused by a
-///disagreement about the protocol between client and service.)
-///
-///   In version 2 of the RPC protocol specification, rpcvers must be equal
-///to 2.  The fields prog, vers, and proc specify the remote program,
-///its version number, and the procedure within the remote program to be
-///called.  After these fields are two authentication parameters:  cred
-///(authentication credentials) and verf (authentication verifier).  The
-///two authentication parameters are followed by the parameters to the
-///remote procedure, which are specified by the specific program
-///protocol.
 pub struct call_body {
-    /// Must be = 2
+    /// RPC version, must be 2
     pub rpcvers: u32,
+    /// The program to call
     pub prog: u32,
+    /// The version of the program
     pub vers: u32,
+    /// The procedure within the program to call
     pub proc: u32,
+    /// Authentication credentials for the caller
     pub cred: opaque_auth,
+    /// Authentication verifier for the caller
     pub verf: opaque_auth,
     /* procedure specific parameters start here */
 }
 XDRStruct!(call_body, rpcvers, prog, vers, proc, cred, verf);
+
+/// The body of an RPC reply, indicating whether the call was accepted or denied
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
-#[repr(u32)]
 pub enum reply_body {
+    /// The call was accepted
     MSG_ACCEPTED(accepted_reply),
+    /// The call was denied
     MSG_DENIED(rejected_reply),
 }
+
 impl Default for reply_body {
     fn default() -> reply_body {
         reply_body::MSG_ACCEPTED(accepted_reply::default())
@@ -295,6 +289,7 @@ impl XDR for reply_body {
         }
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut c: u32 = 0;
         c.deserialize(src)?;
@@ -306,53 +301,77 @@ impl XDR for reply_body {
             let mut r = rejected_reply::default();
             r.deserialize(src)?;
             *self = reply_body::MSG_DENIED(r);
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid reply status in reply_body: {}", c),
+            ));
         }
+
         Ok(())
     }
 }
 
+/// Information about program version mismatch
 #[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, Default)]
-#[repr(C)]
+#[derive(Clone, Debug, Default)]
 pub struct mismatch_info {
+    /// Lowest version supported
     pub low: u32,
+    /// Highest version supported
     pub high: u32,
 }
 XDRStruct!(mismatch_info, low, high);
 
-///Reply to an RPC call that was accepted by the server:
-///There could be an error even though the call was accepted.  The first
-///field is an authentication verifier that the server generates in
-///order to validate itself to the client.  It is followed by a union
-///whose discriminant is an enum accept_stat.  The SUCCESS arm of the
-///union is protocol specific.  The PROG_UNAVAIL, PROC_UNAVAIL, and
-///GARBAGE_ARGS arms of the union are void.  The PROG_MISMATCH arm
-///specifies the lowest and highest version numbers of the remote
-///program supported by the server.
-/// Discriminant is reply_stat
+/// Reply to an RPC call that was accepted by the server.
+///
+/// Even though the call was accepted, there could still be an error in processing it.
+/// The structure contains:
+/// - An authentication verifier generated by the server to validate itself to the client
+/// - A union containing the actual reply data, discriminated by accept_stat enum
+///
+/// The reply_data union has the following arms:
+/// - SUCCESS: Contains protocol-specific success response
+/// - PROG_UNAVAIL: Program not available (void)
+/// - PROG_MISMATCH: Program version mismatch, includes supported version range
+/// - PROC_UNAVAIL: Procedure not available (void)
+/// - GARBAGE_ARGS: Arguments could not be decoded (void)
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
 pub struct accepted_reply {
+    /// Authentication verifier from server
     pub verf: opaque_auth,
+    /// Reply data union discriminated by accept_stat
     pub reply_data: accept_body,
 }
 XDRStruct!(accepted_reply, verf, reply_data);
 
+/// Response data for an accepted RPC call, discriminated by accept_stat.
+///
+/// This enum represents the possible outcomes of an accepted RPC call:
+/// - SUCCESS: Call completed successfully, response data is protocol-specific
+/// - PROG_UNAVAIL: The requested program is not available on this server
+/// - PROG_MISMATCH: Program version mismatch, includes supported version range
+/// - PROC_UNAVAIL: The requested procedure is not available in this program
+/// - GARBAGE_ARGS: The server could not decode the call arguments
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[repr(u32)]
-/// Discriminant is accept_stat
 pub enum accept_body {
+    /// Call completed successfully
     #[default]
     SUCCESS,
+    /// Program is not available on this server
     PROG_UNAVAIL,
-    /// remote can't support version #
+    /// Program version mismatch, includes supported version range
     PROG_MISMATCH(mismatch_info),
+    /// Requested procedure is not available
     PROC_UNAVAIL,
-    /// procedure can't decode params
+    /// Server could not decode the call arguments
     GARBAGE_ARGS,
 }
+
 impl XDR for accept_body {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
         match self {
@@ -373,48 +392,69 @@ impl XDR for accept_body {
                 4_u32.serialize(dest)?;
             }
         }
+
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut c: u32 = 0;
         c.deserialize(src)?;
-        if c == 0 {
-            *self = accept_body::SUCCESS;
-        } else if c == 1 {
-            *self = accept_body::PROG_UNAVAIL;
-        } else if c == 2 {
-            let mut r = mismatch_info::default();
-            r.deserialize(src)?;
-            *self = accept_body::PROG_MISMATCH(r);
-        } else if c == 3 {
-            *self = accept_body::PROC_UNAVAIL;
-        } else {
-            *self = accept_body::GARBAGE_ARGS;
+
+        match c {
+            0 => {
+                *self = accept_body::SUCCESS;
+            }
+            1 => {
+                *self = accept_body::PROG_UNAVAIL;
+            }
+            2 => {
+                let mut m = mismatch_info::default();
+                m.deserialize(src)?;
+                *self = accept_body::PROG_MISMATCH(m);
+            }
+            3 => {
+                *self = accept_body::PROC_UNAVAIL;
+            }
+            4 => {
+                *self = accept_body::GARBAGE_ARGS;
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid accept stat in accept_body: {}", c),
+                ));
+            }
         }
+
         Ok(())
     }
 }
 
+/// Reply sent when an RPC call is rejected by the server.
+///
+/// The call can be rejected for two reasons:
+/// 1. RPC Version Mismatch (RPC_MISMATCH):
+///    - Server is not running a compatible version of the RPC protocol
+///    - Server returns the lowest and highest supported RPC versions
+///
+/// 2. Authentication Error (AUTH_ERROR):
+///    - Server refuses to authenticate the caller
+///    - Returns specific auth failure status code
+///
+/// The discriminant for this enum is `reject_stat` which indicates the
+/// rejection reason.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
-#[repr(u32)]
-///Reply to an RPC call that was rejected by the server:
-///
-///The call can be rejected for two reasons: either the server is not
-///running a compatible version of the RPC protocol (RPC_MISMATCH), or
-///the server refuses to authenticate the caller (AUTH_ERROR). In case
-///of an RPC version mismatch, the server returns the lowest and highest
-///supported RPC version numbers.  In case of refused authentication,
-///failure status is returned.
-/// Discriminant is reject_stat
 pub enum rejected_reply {
+    /// RPC version mismatch - includes supported version range
     RPC_MISMATCH(mismatch_info),
+    /// Authentication failed - includes specific error code
     AUTH_ERROR(auth_stat),
 }
 
 impl Default for rejected_reply {
     fn default() -> rejected_reply {
-        rejected_reply::RPC_MISMATCH(mismatch_info::default())
+        rejected_reply::AUTH_ERROR(auth_stat::default())
     }
 }
 
@@ -427,27 +467,39 @@ impl XDR for rejected_reply {
             }
             rejected_reply::AUTH_ERROR(v) => {
                 1_u32.serialize(dest)?;
-                v.serialize(dest)?;
+                (*v as u32).serialize(dest)?;
             }
         }
+
         Ok(())
     }
+
     fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
         let mut c: u32 = 0;
         c.deserialize(src)?;
+
         if c == 0 {
-            let mut r = mismatch_info::default();
-            r.deserialize(src)?;
-            *self = rejected_reply::RPC_MISMATCH(r);
+            let mut m = mismatch_info::default();
+            m.deserialize(src)?;
+            *self = rejected_reply::RPC_MISMATCH(m);
         } else if c == 1 {
-            let mut r = auth_stat::default();
-            r.deserialize(src)?;
-            *self = rejected_reply::AUTH_ERROR(r);
+            let mut a: u32 = 0;
+            a.deserialize(src)?;
+            *self = rejected_reply::AUTH_ERROR(
+                FromPrimitive::from_u32(a).unwrap_or(auth_stat::AUTH_BADCRED),
+            );
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid reject stat in rejected_reply: {}", c),
+            ));
         }
+
         Ok(())
     }
 }
 
+/// Creates a reply message indicating that the requested procedure is not available
 pub fn proc_unavail_reply_message(xid: u32) -> rpc_msg {
     let reply = reply_body::MSG_ACCEPTED(accepted_reply {
         verf: opaque_auth::default(),
@@ -458,6 +510,8 @@ pub fn proc_unavail_reply_message(xid: u32) -> rpc_msg {
         body: rpc_body::REPLY(reply),
     }
 }
+
+/// Creates a reply message indicating that the requested program is not available
 pub fn prog_unavail_reply_message(xid: u32) -> rpc_msg {
     let reply = reply_body::MSG_ACCEPTED(accepted_reply {
         verf: opaque_auth::default(),
@@ -468,6 +522,8 @@ pub fn prog_unavail_reply_message(xid: u32) -> rpc_msg {
         body: rpc_body::REPLY(reply),
     }
 }
+
+/// Creates a reply message indicating a program version mismatch
 pub fn prog_mismatch_reply_message(xid: u32, accepted_ver: u32) -> rpc_msg {
     let reply = reply_body::MSG_ACCEPTED(accepted_reply {
         verf: opaque_auth::default(),
@@ -481,6 +537,8 @@ pub fn prog_mismatch_reply_message(xid: u32, accepted_ver: u32) -> rpc_msg {
         body: rpc_body::REPLY(reply),
     }
 }
+
+/// Creates a reply message indicating that the arguments could not be decoded
 pub fn garbage_args_reply_message(xid: u32) -> rpc_msg {
     let reply = reply_body::MSG_ACCEPTED(accepted_reply {
         verf: opaque_auth::default(),
@@ -492,6 +550,7 @@ pub fn garbage_args_reply_message(xid: u32) -> rpc_msg {
     }
 }
 
+/// Creates a reply message indicating an RPC version mismatch
 pub fn rpc_vers_mismatch(xid: u32) -> rpc_msg {
     let reply = reply_body::MSG_DENIED(rejected_reply::RPC_MISMATCH(mismatch_info::default()));
     rpc_msg {
@@ -500,6 +559,7 @@ pub fn rpc_vers_mismatch(xid: u32) -> rpc_msg {
     }
 }
 
+/// Creates a successful reply message with no additional data
 pub fn make_success_reply(xid: u32) -> rpc_msg {
     let reply = reply_body::MSG_ACCEPTED(accepted_reply {
         verf: opaque_auth::default(),

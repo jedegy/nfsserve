@@ -1,3 +1,28 @@
+//! Implementation of the READDIRPLUS procedure (procedure 17) for NFS version 3 protocol
+//! as defined in RFC 1813 section 3.3.17.
+//!
+//! The READDIRPLUS procedure is an extended version of READDIR that returns
+//! file handles and attributes in addition to directory entries. This procedure
+//! is intended to eliminate separate LOOKUP calls for clients that want to
+//! get attributes and file handles for directory entries.
+//!
+//! The client specifies:
+//! - The file handle of the directory to read
+//! - A cookie indicating where to start reading in the directory
+//! - A cookie verifier to validate the cookie
+//! - The maximum size of directory information to return
+//! - The maximum size of attribute information to return
+//!
+//! On successful return, the server provides:
+//! - The directory attributes
+//! - A list of entries, each containing:
+//!   * The file identifier (fileid)
+//!   * The filename
+//!   * A cookie for retrieving the next batch of entries
+//!   * The file attributes
+//!   * The file handle
+//! - A flag indicating whether the end of the directory was reached
+
 use std::io::{Read, Write};
 
 use tracing::{debug, error, trace};
@@ -5,6 +30,22 @@ use tracing::{debug, error, trace};
 use crate::protocol::rpc;
 use crate::protocol::xdr::{self, nfs3, XDR};
 
+/// Handles NFSv3 READDIRPLUS procedure (procedure 17)
+///
+/// READDIRPLUS retrieves directory entries with their attributes and file handles.
+/// Takes directory handle, cookie, cookie verifier, and maximum size limits.
+/// Returns directory entries with file attributes and file handles for each entry.
+///
+/// # Arguments
+///
+/// * `xid` - RPC transaction ID
+/// * `input` - Input stream containing the READDIRPLUS arguments
+/// * `output` - Output stream for writing the response
+/// * `context` - Server context containing VFS
+///
+/// # Returns
+///
+/// * `Result<(), anyhow::Error>` - Ok(()) on success or an error
 pub async fn nfsproc3_readdirplus(
     xid: u32,
     input: &mut impl Read,
