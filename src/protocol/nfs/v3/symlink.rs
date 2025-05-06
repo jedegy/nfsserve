@@ -20,7 +20,7 @@ pub async fn nfsproc3_symlink(
         nfs3::wcc_data::default().serialize(output)?;
         return Ok(());
     }
-    let mut args = nfs3::SYMLINK3args::default();
+    let mut args = nfs3::dir::SYMLINK3args::default();
     args.deserialize(input)?;
 
     debug!("nfsproc3_symlink({:?}, {:?}) ", xid, args);

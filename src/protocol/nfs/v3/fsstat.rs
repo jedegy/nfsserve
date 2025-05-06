@@ -28,7 +28,7 @@ pub async fn nfsproc3_fsstat(
         Ok(v) => nfs3::post_op_attr::attributes(v),
         Err(_) => nfs3::post_op_attr::Void,
     };
-    let res = nfs3::FSSTAT3resok {
+    let res = nfs3::fs::FSSTAT3resok {
         obj_attributes: obj_attr,
         tbytes: 1024 * 1024 * 1024 * 1024,
         fbytes: 1024 * 1024 * 1024 * 1024,

@@ -11,7 +11,7 @@ pub async fn nfsproc3_read(
     output: &mut impl Write,
     context: &rpc::Context,
 ) -> Result<(), anyhow::Error> {
-    let mut args = nfs3::READ3args::default();
+    let mut args = nfs3::file::READ3args::default();
     args.deserialize(input)?;
     debug!("nfsproc3_read({:?},{:?}) ", xid, args);
 
@@ -30,7 +30,7 @@ pub async fn nfsproc3_read(
     };
     match context.vfs.read(id, args.offset, args.count).await {
         Ok((bytes, eof)) => {
-            let res = nfs3::READ3resok {
+            let res = nfs3::file::READ3resok {
                 file_attributes: obj_attr,
                 count: bytes.len() as u32,
                 eof,

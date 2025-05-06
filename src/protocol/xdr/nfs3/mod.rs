@@ -1,4 +1,4 @@
-// this is just a complete enumeration of everything in the RFC
+// Basic types and constants for NFS3 protocol from RFC
 #![allow(dead_code)]
 // And its nice to keep the original RFC names and case
 #![allow(non_camel_case_types)]
@@ -11,9 +11,13 @@ use filetime;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
 
-use super::*;
+use crate::protocol::xdr::XDR;
+use crate::{XDRBoolUnion, XDREnumSerde, XDRStruct};
 
-// Transcribed from RFC 1813.
+// Modules for different operation types
+pub mod dir;
+pub mod file;
+pub mod fs;
 
 // Section 2.2 Constants
 /// These are the RPC constants needed to call the NFS Version 3
@@ -266,6 +270,7 @@ pub enum ftype3 {
     NF3FIFO = 7,
 }
 XDREnumSerde!(ftype3);
+
 /// Device Number information. Ex: Major / Minor device
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
@@ -326,59 +331,6 @@ XDRStruct!(
     fattr3, ftype, mode, nlink, uid, gid, size, used, rdev, fsid, fileid, atime, mtime, ctime
 );
 
-// Section 3.3.19. Procedure 19: FSINFO - Get static file system Information
-// The following constants are used in fsinfo to construct the bitmask 'properties',
-// which represents the file system properties.
-
-/// If this bit is 1 (TRUE), the file system supports hard links.
-pub const FSF_LINK: u32 = 0x0001;
-
-/// If this bit is 1 (TRUE), the file system supports symbolic links.
-pub const FSF_SYMLINK: u32 = 0x0002;
-
-/// If this bit is 1 (TRUE), the information returned by
-/// PATHCONF is identical for every file and directory
-/// in the file system. If it is 0 (FALSE), the client
-/// should retrieve PATHCONF information for each file
-/// and directory as required.
-pub const FSF_HOMOGENEOUS: u32 = 0x0008;
-
-/// If this bit is 1 (TRUE), the server will set the
-/// times for a file via SETATTR if requested (to the
-/// accuracy indicated by time_delta). If it is 0
-/// (FALSE), the server cannot set times as requested.
-pub const FSF_CANSETTIME: u32 = 0x0010;
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct fsinfo3 {
-    pub obj_attributes: post_op_attr,
-    pub rtmax: u32,
-    pub rtpref: u32,
-    pub rtmult: u32,
-    pub wtmax: u32,
-    pub wtpref: u32,
-    pub wtmult: u32,
-    pub dtpref: u32,
-    pub maxfilesize: size3,
-    pub time_delta: nfstime3,
-    pub properties: u32,
-}
-XDRStruct!(
-    fsinfo3,
-    obj_attributes,
-    rtmax,
-    rtpref,
-    rtmult,
-    wtmax,
-    wtpref,
-    wtmult,
-    dtpref,
-    maxfilesize,
-    time_delta,
-    properties
-);
-
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct wcc_attr {
@@ -426,6 +378,7 @@ pub enum post_op_fh3 {
 }
 XDRBoolUnion!(post_op_fh3, handle, nfs_fh3);
 
+// Атрибуты и структуры для установки атрибутов
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
@@ -612,213 +565,7 @@ pub fn get_root_mount_handle() -> Vec<u8> {
     vec![0]
 }
 
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct READ3args {
-    pub file: nfs_fh3,
-    pub offset: offset3,
-    pub count: count3,
-}
-XDRStruct!(READ3args, file, offset, count);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct READ3resok {
-    pub file_attributes: post_op_attr,
-    pub count: count3,
-    pub eof: bool,
-    pub data: Vec<u8>,
-}
-XDRStruct!(READ3resok, file_attributes, count, eof, data);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct COMMIT3args {
-    pub file: nfs_fh3,
-    pub offset: offset3,
-    pub count: count3,
-}
-XDRStruct!(COMMIT3args, file, offset, count);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct COMMIT3resok {
-    pub file_wcc: wcc_data,
-    pub verf: writeverf3,
-}
-XDRStruct!(COMMIT3resok, file_wcc, verf);
-
-#[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
-#[repr(u32)]
-pub enum devicetype3 {
-    #[default]
-    NF3CHR = 0,
-    NF3BLK = 1,
-    NF3SOCK = 2,
-    NF3FIFO = 3,
-}
-XDREnumSerde!(devicetype3);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct devicedata3 {
-    pub dev_type: devicetype3,
-    pub device: specdata3,
-}
-XDRStruct!(devicedata3, dev_type, device);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct mknoddata3 {
-    pub mknod_type: ftype3,
-    pub device: devicedata3,
-}
-XDRStruct!(mknoddata3, mknod_type, device);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct MKNOD3args {
-    pub where_dir: diropargs3,
-    pub what: mknoddata3,
-}
-XDRStruct!(MKNOD3args, where_dir, what);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct LINK3args {
-    pub file: nfs_fh3,
-    pub link: diropargs3,
-}
-XDRStruct!(LINK3args, file, link);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct WRITE3args {
-    pub file: nfs_fh3,
-    pub offset: offset3,
-    pub count: count3,
-    pub stable: u32,
-    pub data: Vec<u8>,
-}
-XDRStruct!(WRITE3args, file, offset, count, stable, data);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct WRITE3resok {
-    pub file_wcc: wcc_data,
-    pub count: count3,
-    pub committed: stable_how,
-    pub verf: writeverf3,
-}
-XDRStruct!(WRITE3resok, file_wcc, count, committed, verf);
-
-#[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
-#[repr(u32)]
-pub enum stable_how {
-    #[default]
-    UNSTABLE = 0,
-    DATA_SYNC = 1,
-    FILE_SYNC = 2,
-}
-XDREnumSerde!(stable_how);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct READDIRPLUS3args {
-    pub dir: nfs_fh3,
-    pub cookie: cookie3,
-    pub cookieverf: cookieverf3,
-    pub dircount: count3,
-    pub maxcount: count3,
-}
-XDRStruct!(
-    READDIRPLUS3args,
-    dir,
-    cookie,
-    cookieverf,
-    dircount,
-    maxcount
-);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct entry3 {
-    pub fileid: fileid3,
-    pub name: filename3,
-    pub cookie: cookie3,
-}
-XDRStruct!(entry3, fileid, name, cookie);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct READDIR3args {
-    pub dir: nfs_fh3,
-    pub cookie: cookie3,
-    pub cookieverf: cookieverf3,
-    pub dircount: count3,
-}
-XDRStruct!(READDIR3args, dir, cookie, cookieverf, dircount);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct entryplus3 {
-    pub fileid: fileid3,
-    pub name: filename3,
-    pub cookie: cookie3,
-    pub name_attributes: post_op_attr,
-    pub name_handle: post_op_fh3,
-}
-XDRStruct!(
-    entryplus3,
-    fileid,
-    name,
-    cookie,
-    name_attributes,
-    name_handle
-);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct FSSTAT3resok {
-    pub obj_attributes: post_op_attr,
-    pub tbytes: size3,
-    pub fbytes: size3,
-    pub abytes: size3,
-    pub tfiles: size3,
-    pub ffiles: size3,
-    pub afiles: size3,
-    pub invarsec: u32,
-}
-XDRStruct!(
-    FSSTAT3resok,
-    obj_attributes,
-    tbytes,
-    fbytes,
-    abytes,
-    tfiles,
-    ffiles,
-    afiles,
-    invarsec
-);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct MKDIR3args {
-    pub dirops: diropargs3,
-    pub attributes: sattr3,
-}
-XDRStruct!(MKDIR3args, dirops, attributes);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct SYMLINK3args {
-    pub dirops: diropargs3,
-    pub symlink: symlinkdata3,
-}
-XDRStruct!(SYMLINK3args, dirops, symlink);
-
+// Константы доступа
 pub const ACCESS3_READ: u32 = 0x0001;
 pub const ACCESS3_LOOKUP: u32 = 0x0002;
 pub const ACCESS3_MODIFY: u32 = 0x0004;
@@ -836,28 +583,6 @@ pub enum createmode3 {
     EXCLUSIVE = 2,
 }
 XDREnumSerde!(createmode3);
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, Default)]
-pub struct PATHCONF3resok {
-    pub obj_attributes: post_op_attr,
-    pub linkmax: u32,
-    pub name_max: u32,
-    pub no_trunc: bool,
-    pub chown_restricted: bool,
-    pub case_insensitive: bool,
-    pub case_preserving: bool,
-}
-XDRStruct!(
-    PATHCONF3resok,
-    obj_attributes,
-    linkmax,
-    name_max,
-    no_trunc,
-    chown_restricted,
-    case_insensitive,
-    case_preserving
-);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]

@@ -25,10 +25,10 @@ macro_rules! XDREnumSerde {
     ($t:ident) => {
         impl XDR for $t {
             fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
-                dest.write_u32::<XDREndian>(*self as u32)
+                dest.write_u32::<$crate::xdr::XDREndian>(*self as u32)
             }
             fn deserialize<R: Read>(&mut self, src: &mut R) -> std::io::Result<()> {
-                let r: u32 = src.read_u32::<XDREndian>()?;
+                let r: u32 = src.read_u32::<$crate::xdr::XDREndian>()?;
                 if let Some(p) = FromPrimitive::from_u32(r) {
                     *self = p;
                 } else {
@@ -226,6 +226,7 @@ macro_rules! XDRBoolUnion {
     };
 }
 
-pub(crate) use XDRBoolUnion;
-pub(crate) use XDREnumSerde;
-pub(crate) use XDRStruct;
+// Re-export public types for use in other modules
+pub use crate::XDRBoolUnion;
+pub use crate::XDREnumSerde;
+pub use crate::XDRStruct;

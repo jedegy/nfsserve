@@ -11,7 +11,7 @@ pub async fn nfsproc3_commit(
     output: &mut impl Write,
     context: &rpc::Context,
 ) -> Result<(), anyhow::Error> {
-    let mut args = nfs3::COMMIT3args::default();
+    let mut args = nfs3::file::COMMIT3args::default();
     args.deserialize(input)?;
     debug!("nfsproc3_commit({:?}, {:?}) ", xid, args);
 
@@ -43,7 +43,7 @@ pub async fn nfsproc3_commit(
         Ok(fattr) => {
             let post_obj_attr = nfs3::post_op_attr::attributes(fattr);
 
-            let res = nfs3::COMMIT3resok {
+            let res = nfs3::file::COMMIT3resok {
                 file_wcc: nfs3::wcc_data {
                     before: pre_obj_attr,
                     after: post_obj_attr,

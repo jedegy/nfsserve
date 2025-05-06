@@ -22,7 +22,7 @@ pub async fn nfsproc3_link(
         return Ok(());
     }
 
-    let mut args = nfs3::LINK3args::default();
+    let mut args = nfs3::file::LINK3args::default();
     args.deserialize(input)?;
     debug!("nfsproc3_link({:?}, {:?}) ", xid, args);
 

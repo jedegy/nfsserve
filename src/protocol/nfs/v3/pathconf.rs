@@ -29,7 +29,7 @@ pub async fn nfsproc3_pathconf(
         Ok(v) => nfs3::post_op_attr::attributes(v),
         Err(_) => nfs3::post_op_attr::Void,
     };
-    let res = nfs3::PATHCONF3resok {
+    let res = nfs3::fs::PATHCONF3resok {
         obj_attributes: obj_attr,
         linkmax: 0,
         name_max: 32768,

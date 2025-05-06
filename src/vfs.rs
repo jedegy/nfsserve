@@ -272,13 +272,16 @@ pub trait NFSFileSystem: Sync {
     ) -> Result<nfs3::fattr3, nfs3::nfsstat3>;
 
     /// Get static file system Information
-    async fn fsinfo(&self, root_fileid: nfs3::fileid3) -> Result<nfs3::fsinfo3, nfs3::nfsstat3> {
+    async fn fsinfo(
+        &self,
+        root_fileid: nfs3::fileid3,
+    ) -> Result<nfs3::fs::fsinfo3, nfs3::nfsstat3> {
         let dir_attr: nfs3::post_op_attr = match self.getattr(root_fileid).await {
             Ok(v) => nfs3::post_op_attr::attributes(v),
             Err(_) => nfs3::post_op_attr::Void,
         };
 
-        let res = nfs3::fsinfo3 {
+        let res = nfs3::fs::fsinfo3 {
             obj_attributes: dir_attr,
             rtmax: 1024 * 1024,
             rtpref: 1024 * 124,
@@ -292,7 +295,9 @@ pub trait NFSFileSystem: Sync {
                 seconds: 0,
                 nseconds: 1000000,
             },
-            properties: nfs3::FSF_SYMLINK | nfs3::FSF_HOMOGENEOUS | nfs3::FSF_CANSETTIME,
+            properties: nfs3::fs::FSF_SYMLINK
+                | nfs3::fs::FSF_HOMOGENEOUS
+                | nfs3::fs::FSF_CANSETTIME,
         };
         Ok(res)
     }

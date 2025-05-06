@@ -11,7 +11,7 @@ pub async fn nfsproc3_readdir(
     output: &mut impl Write,
     context: &rpc::Context,
 ) -> Result<(), anyhow::Error> {
-    let mut args = nfs3::READDIR3args::default();
+    let mut args = nfs3::dir::READDIR3args::default();
     args.deserialize(input)?;
     debug!("nfsproc3_readdirplus({:?},{:?}) ", xid, args);
 
@@ -66,7 +66,7 @@ pub async fn nfsproc3_readdir(
             dir_attr.serialize(&mut counting_output)?;
             dirversion.serialize(&mut counting_output)?;
             for entry in result.entries {
-                let entry = nfs3::entry3 {
+                let entry = nfs3::dir::entry3 {
                     fileid: entry.fileid,
                     name: entry.name,
                     cookie: entry.fileid,

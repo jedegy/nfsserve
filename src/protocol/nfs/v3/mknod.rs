@@ -21,7 +21,7 @@ pub async fn nfsproc3_mknod(
         return Ok(());
     }
 
-    let mut args = nfs3::MKNOD3args::default();
+    let mut args = nfs3::dir::MKNOD3args::default();
     args.deserialize(input)?;
     debug!("nfsproc3_mknod({:?}, {:?}) ", xid, args);
 

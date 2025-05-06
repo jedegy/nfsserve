@@ -20,7 +20,7 @@ pub async fn nfsproc3_mkdir(
         nfs3::wcc_data::default().serialize(output)?;
         return Ok(());
     }
-    let mut args = nfs3::MKDIR3args::default();
+    let mut args = nfs3::dir::MKDIR3args::default();
     args.deserialize(input)?;
 
     debug!("nfsproc3_mkdir({:?}, {:?}) ", xid, args);

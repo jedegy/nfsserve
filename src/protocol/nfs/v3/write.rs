@@ -21,7 +21,7 @@ pub async fn nfsproc3_write(
         return Ok(());
     }
 
-    let mut args = nfs3::WRITE3args::default();
+    let mut args = nfs3::file::WRITE3args::default();
     args.deserialize(input)?;
     debug!("nfsproc3_write({:?},...) ", xid);
     // sanity check the length
@@ -55,13 +55,13 @@ pub async fn nfsproc3_write(
     match context.vfs.write(id, args.offset, &args.data).await {
         Ok(fattr) => {
             debug!("write success {:?} --> {:?}", xid, fattr);
-            let res = nfs3::WRITE3resok {
+            let res = nfs3::file::WRITE3resok {
                 file_wcc: nfs3::wcc_data {
                     before: pre_obj_attr,
                     after: nfs3::post_op_attr::attributes(fattr),
                 },
                 count: args.count,
-                committed: nfs3::stable_how::FILE_SYNC,
+                committed: nfs3::file::stable_how::FILE_SYNC,
                 verf: context.vfs.serverid(),
             };
             xdr::rpc::make_success_reply(xid).serialize(output)?;
