@@ -1,4 +1,4 @@
-//! RPC (Remote Procedure Call) protocol implementation as specified in RFC 1057.
+//! RPC (Remote Procedure Call) protocol implementation as specified in RFC 5531 (previously RFC 1057).
 //!
 //! The RPC protocol enables programs to call procedures on remote systems as if
 //! they were local calls. It forms the foundation for all NFS operations by

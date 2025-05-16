@@ -1,4 +1,4 @@
-//! This module implements the Portmap protocol (RFC 1057 Appendix A) data structures
+//! This module implements the Portmap protocol (RFC 5531, previously RFC 1057 Appendix A) data structures
 //! for XDR serialization and deserialization.
 //!
 //! Portmap (also known as Portmapper) is a service that maps RPC program numbers

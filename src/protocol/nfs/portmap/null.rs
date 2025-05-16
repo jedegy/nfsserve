@@ -1,5 +1,5 @@
 //! Implementation of the NULL procedure (procedure 0) for PORTMAP protocol
-//! as defined in RFC 1057 Appendix A.
+//! as defined in RFC 5531 (previously RFC 1057 Appendix A).
 //!
 //! The NULL procedure does no work. It is available to allow server response testing
 //! and timing. It has no arguments and returns nothing.

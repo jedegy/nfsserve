@@ -1,5 +1,5 @@
 //! This module provides data structures for the Remote Procedure Call (RPC) protocol
-//! as defined in RFC 1057. These structures handle serialization and deserialization
+//! as defined in RFC 5531 (previously RFC 1057). These structures handle serialization and deserialization
 //! of RPC messages between client and server.
 
 // Allow unused code since we implement the complete RFC specification
@@ -143,7 +143,7 @@ XDRStruct!(auth_unix, stamp, machinename, uid, gid, gids);
 /// If authentication fails, the reply message will include details about why the
 /// auth parameters were rejected.
 ///
-/// Opaque authentication data structure as defined in RFC 1057
+/// Opaque authentication data structure as defined in RFC 5531 (previously RFC 1057)
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
 pub struct opaque_auth {
@@ -163,7 +163,7 @@ impl Default for opaque_auth {
     }
 }
 
-/// RPC message structure as defined in RFC 1057.
+/// RPC message structure as defined in RFC 5531 (previously RFC 1057).
 ///
 /// Each RPC message begins with a transaction identifier (xid) followed by a
 /// discriminated union containing either a CALL or REPLY message body.

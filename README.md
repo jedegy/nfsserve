@@ -86,11 +86,11 @@ TODO and Seeking Contributors
 
 Relevant RFCs
 =============
- - XDR is the message format: RFC 1014. https://datatracker.ietf.org/doc/html/rfc1014
- - SUN RPC is the RPC wire format: RFC 1057 https://datatracker.ietf.org/doc/html/rfc1057
+ - XDR is the message format: RFC 1832 (obsoletes RFC 1014). https://datatracker.ietf.org/doc/html/rfc1832
+ - RPC is the wire format: RFC 5531 (obsoletes RFC 1831, which obsoleted RFC 1057). https://datatracker.ietf.org/doc/html/rfc5531
  - NFS is at RFC 1813 https://datatracker.ietf.org/doc/html/rfc1813
  - NFS Mount Protocol is at RFC 1813 Appendix I. https://datatracker.ietf.org/doc/html/rfc1813#appendix-I
- - PortMapper is at RFC 1057 Appendix A https://datatracker.ietf.org/doc/html/rfc1057#appendix-A
+ - PortMapper is described in RFC 5531 (previously in RFC 1057 Appendix A). https://datatracker.ietf.org/doc/html/rfc5531
 
 Basic Source Layout
 ===================

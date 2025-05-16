@@ -1,5 +1,5 @@
 //! The XDR (External Data Representation) module defines data structures and methods
-//! for serializing/deserializing data according to RFC 1014 standard.
+//! for serializing/deserializing data according to RFC 1832 standard.
 //!
 //! XDR provides machine-independent data representation format,
 //! which is critical for network protocols like NFS.
@@ -21,7 +21,7 @@ pub mod rpc;
 pub type XDREndian = BigEndian;
 
 /// The XDR trait defines methods for serializing and deserializing data structures
-/// according to the External Data Representation (XDR) standard defined in RFC 1014.
+/// according to the External Data Representation (XDR) standard defined in RFC 1832.
 ///
 /// XDR provides a standard way of representing data in a machine-independent format,
 /// which is critical for network protocols like NFS.

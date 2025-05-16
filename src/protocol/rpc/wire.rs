@@ -1,4 +1,4 @@
-//! RPC message framing and transmission as specified in RFC 1057 section 10.
+//! RPC message framing and transmission as specified in RFC 5531 (previously RFC 1057 section 10).
 //!
 //! This module implements the Record Marking Standard for sending RPC messages
 //! over TCP connections. It provides:
@@ -32,8 +32,7 @@ use crate::protocol::{nfs, rpc};
 
 // Information from RFC 5531 (ONC RPC v2)
 // https://datatracker.ietf.org/doc/html/rfc5531
-// And RFC 1057 (Original RPC)
-// https://datatracker.ietf.org/doc/html/rfc1057
+// Which obsoletes RFC 1831 and RFC 1057 (Original RPC)
 
 /// RPC program number for NFS Access Control Lists
 const NFS_ACL_PROGRAM: u32 = 100227;
@@ -52,8 +51,8 @@ const NFS_METADATA_PROGRAM: u32 = 200024;
 /// 5. Routes the call to the appropriate protocol handler (NFS, MOUNT, PORTMAP)
 /// 6. Tracks transaction completion state
 ///
-/// This implementation follows RFC 1057 section 8 (Authentication) and
-/// section 11 (Record Marking Standard) for proper RPC message handling.
+/// This implementation follows RFC 5531 (previously RFC 1057) section on Authentication and
+/// Record Marking Standard for proper RPC message handling.
 ///
 /// Returns true if a response was sent, false otherwise (for retransmissions).
 async fn handle_rpc(
@@ -126,7 +125,7 @@ async fn handle_rpc(
 
 /// Reads a single record-marked fragment from a stream
 ///
-/// Implements the RFC 1057 section 10 (Record Marking Standard) for TCP transport.
+/// Implements the RFC 5531 (previously RFC 1057 section 10) Record Marking Standard for TCP transport.
 /// The record marking standard addresses the problem of delimiting records in a
 /// stream protocol like TCP by prefixing each record with a 4-byte header.
 ///
@@ -161,7 +160,7 @@ async fn read_fragment(
 
 /// Writes data as record-marked fragments to a TCP stream
 ///
-/// Implements the RFC 1057 section 10 (Record Marking Standard) for TCP transport.
+/// Implements the RFC 5531 (previously RFC 1057 section 10) Record Marking Standard for TCP transport.
 /// This standard enables RPC to utilize TCP as a transport while maintaining proper
 /// message boundaries essential for RPC semantics.
 ///

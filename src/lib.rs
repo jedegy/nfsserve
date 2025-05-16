@@ -30,8 +30,8 @@
 //!
 //! This implementation follows these RFCs:
 //! - RFC 1813: NFS Version 3 Protocol Specification
-//! - RFC 1831: RPC: Remote Procedure Call Protocol Specification Version 2
-//! - RFC 1832: XDR: External Data Representation Standard
+//! - RFC 5531: RPC: Remote Procedure Call Protocol Specification Version 2 (obsoletes RFC 1831)
+//! - RFC 1832: XDR: External Data Representation Standard (obsoletes RFC 1014)
 //! - RFC 1833: Binding Protocols for ONC RPC Version 2
 //!
 //! ## Usage

@@ -1,4 +1,4 @@
-//! PORTMAP protocol implementation as specified in RFC 1057 Appendix A.
+//! PORTMAP protocol implementation as specified in RFC 5531 (previously RFC 1057 Appendix A).
 //!
 //! The PORTMAP protocol (also known as Portmapper) is a service that maps RPC program numbers
 //! to network port numbers. It is used by NFS clients to:

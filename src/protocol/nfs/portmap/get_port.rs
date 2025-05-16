@@ -1,5 +1,5 @@
 //! Implementation of the GETPORT procedure (procedure 3) for PORTMAP protocol
-//! as defined in RFC 1057 Appendix A.
+//! as defined in RFC 5531 (previously RFC 1057 Appendix A).
 //!
 //! The GETPORT procedure maps an RPC program number, version number, and transport protocol
 //! to the port number on which the program is awaiting call requests. It takes a map structure

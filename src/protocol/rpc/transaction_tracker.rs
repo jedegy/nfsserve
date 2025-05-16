@@ -1,4 +1,4 @@
-//! Transaction tracking for RPC idempotency as described in RFC 1057.
+//! Transaction tracking for RPC idempotency as described in RFC 5531 (previously RFC 1057).
 //!
 //! This module implements the idempotency requirements for RPC by tracking
 //! transaction state using transaction IDs (XIDs) and client addresses.
