@@ -12,6 +12,7 @@
 //! 4. Program/procedure number dispatching
 //! 5. Error handling and reporting
 //! 6. Asynchronous message processing
+//! 7. Ordered command processing with FIFO guarantees
 //!
 //! RPC provides important benefits for distributed systems:
 //! - Location transparency (clients don't need to know server locations)
@@ -23,6 +24,7 @@
 //! the NFS, MOUNT, and PORTMAP protocols, handling all aspects of message
 //! encoding, transmission, and routing.
 
+mod command_queue;
 mod context;
 mod transaction_tracker;
 mod wire;

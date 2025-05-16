@@ -27,6 +27,7 @@ use tokio::io::DuplexStream;
 use tokio::sync::mpsc;
 use tracing::{debug, error, trace, warn};
 
+use crate::protocol::rpc::command_queue::{CommandQueue, CommandResult, ResponseBuffer};
 use crate::protocol::xdr::{self, mount, nfs3, portmap, XDR};
 use crate::protocol::{nfs, rpc};
 
@@ -40,6 +41,8 @@ const NFS_ACL_PROGRAM: u32 = 100227;
 const NFS_ID_MAP_PROGRAM: u32 = 100270;
 /// RPC program number for NFS Metadata
 const NFS_METADATA_PROGRAM: u32 = 200024;
+/// Initial size of RPC response buffer
+const DEFAULT_RESPONSE_BUFFER_CAPACITY: usize = 8192;
 
 /// Processes a single RPC message
 ///
@@ -55,7 +58,7 @@ const NFS_METADATA_PROGRAM: u32 = 200024;
 /// Record Marking Standard for proper RPC message handling.
 ///
 /// Returns true if a response was sent, false otherwise (for retransmissions).
-async fn handle_rpc(
+pub async fn handle_rpc(
     input: &mut impl Read,
     output: &mut impl Write,
     mut context: rpc::Context,
@@ -225,10 +228,14 @@ pub type SocketMessageType = Result<Vec<u8>, anyhow::Error>;
 /// for reliable message delimitation over TCP.
 #[derive(Debug)]
 pub struct SocketMessageHandler {
+    /// Buffer for current fragment
     cur_fragment: Vec<u8>,
+    /// Channel for receiving data from socket
     socket_receive_channel: DuplexStream,
-    reply_send_channel: mpsc::UnboundedSender<SocketMessageType>,
+    /// RPC context for request processing
     context: rpc::Context,
+    /// Command queue for ordered processing
+    command_queue: CommandQueue,
 }
 
 impl SocketMessageHandler {
@@ -238,7 +245,8 @@ impl SocketMessageHandler {
     /// necessary communication channels. Returns the handler itself, a duplex
     /// stream for writing to the socket, and a receiver for processed messages.
     ///
-    /// This setup enables asynchronous processing of RPC messages.
+    /// This setup enables asynchronous processing of RPC messages while maintaining
+    /// order of operations.
     pub fn new(
         context: &rpc::Context,
     ) -> (
@@ -248,12 +256,45 @@ impl SocketMessageHandler {
     ) {
         let (socksend, sockrecv) = tokio::io::duplex(256000);
         let (msgsend, msgrecv) = mpsc::unbounded_channel();
+
+        // Create separate channel for command results
+        let (result_sender, mut result_receiver) = mpsc::unbounded_channel::<CommandResult>();
+
+        // Create command queue with our RPC processing function
+        let command_queue = CommandQueue::new(
+            process_rpc_command,
+            result_sender,
+            DEFAULT_RESPONSE_BUFFER_CAPACITY,
+        );
+
+        // Process results from command queue and send them to socket
+        tokio::spawn(async move {
+            while let Some(result) = result_receiver.recv().await {
+                match result {
+                    Ok(Some(response_buffer)) if response_buffer.has_content() => {
+                        let _ = msgsend.send(Ok(response_buffer.into_inner()));
+                    }
+                    Ok(None) => {
+                        // No response needed, so nothing to send
+                    }
+                    Ok(Some(_)) => {
+                        // Buffer exists but contains no data to send
+                    }
+                    Err(e) => {
+                        error!("RPC error: {:?}", e);
+                        let _ = msgsend.send(Err(e));
+                    }
+                }
+            }
+            debug!("Command result handler finished");
+        });
+
         (
             Self {
                 cur_fragment: Vec::new(),
                 socket_receive_channel: sockrecv,
-                reply_send_channel: msgsend,
                 context: context.clone(),
+                command_queue,
             },
             socksend,
             msgrecv,
@@ -264,35 +305,64 @@ impl SocketMessageHandler {
     ///
     /// Reads a single record-marked fragment from the socket and appends it to
     /// the current message buffer. If the fragment is the last one in the record,
-    /// spawns a task to process the complete RPC message and prepare a response.
+    /// submits a command to the queue for processing in order.
     /// Should be called in a loop to continuously process incoming messages.
     pub async fn read(&mut self) -> Result<(), anyhow::Error> {
         let is_last =
             read_fragment(&mut self.socket_receive_channel, &mut self.cur_fragment).await?;
         if is_last {
-            let fragment = std::mem::take(&mut self.cur_fragment);
+            // Take buffer and create new one for next fragment
+            let fragment_data = std::mem::take(&mut self.cur_fragment);
             let context = self.context.clone();
-            let send = self.reply_send_channel.clone();
-            tokio::spawn(async move {
-                let mut write_buf: Vec<u8> = Vec::new();
-                let mut write_cursor = Cursor::new(&mut write_buf);
-                let maybe_reply =
-                    handle_rpc(&mut Cursor::new(fragment), &mut write_cursor, context).await;
-                match maybe_reply {
-                    Err(e) => {
-                        error!("RPC Error: {:?}", e);
-                        let _ = send.send(Err(e));
-                    }
-                    Ok(true) => {
-                        let _ = std::io::Write::flush(&mut write_cursor);
-                        let _ = send.send(Ok(write_buf));
-                    }
-                    Ok(false) => {
-                        // do not reply
-                    }
-                }
-            });
+
+            // Submit command to queue for ordered processing
+            if let Err(e) = self.command_queue.submit_command(fragment_data, context) {
+                error!("Failed to submit command to queue: {:?}", e);
+                return Err(anyhow::anyhow!("Command queue error: {}", e));
+            }
         }
         Ok(())
     }
+}
+
+/// Standard async RPC processing function that can be used with CommandQueue
+///
+/// Processes an RPC command by:
+/// 1. Deserializing the RPC message
+/// 2. Processing the RPC call according to standard protocol
+/// 3. Writing response to output buffer
+///
+/// # Arguments
+///
+/// * `data` - Buffer containing RPC message
+/// * `output` - Buffer for writing response
+/// * `context` - RPC processing context
+///
+/// # Returns
+///
+/// `Ok(true)` if response needs to be sent
+/// `Ok(false)` if no response needed (e.g. retransmission)
+/// `Err` if processing error occurred
+pub fn process_rpc_command<'a>(
+    data: &[u8],
+    output: &'a mut ResponseBuffer,
+    context: rpc::Context,
+) -> futures::future::BoxFuture<'a, anyhow::Result<bool>> {
+    // Clone data to own it in closure
+    let data_clone = data.to_vec();
+
+    Box::pin(async move {
+        // Create cursor for reading data
+        let mut input_cursor = Cursor::new(data_clone);
+
+        // Get internal buffer for writing
+        let output_buffer = output.get_mut_buffer();
+        let mut output_cursor = Cursor::new(output_buffer);
+
+        // Call RPC handler
+        let result = handle_rpc(&mut input_cursor, &mut output_cursor, context).await?;
+
+        // If response was generated, return true
+        Ok(result)
+    })
 }
